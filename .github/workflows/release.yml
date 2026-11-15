@@ -40,3 +40,5 @@ jobs:
         env:
           NPM_CONFIG_TOKEN: ${{ secrets.NPM_CONFIG_TOKEN }}
           RELEASE_BUMP: ${{ github.event.inputs.bump || 'auto' }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
