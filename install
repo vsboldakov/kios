@@ -1,0 +1,222 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP=kios
+NPM_PACKAGE=@vsboldakov/kios
+MIN_BUN=1.3.5
+INSTALL_DIR="$HOME/.kios/bin"
+LIB_DIR="$HOME/.kios/lib"
+
+MUTED='\033[0;2m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+usage() {
+  cat <<EOF
+Install kios, a terminal UI for Kubernetes.
+
+Usage:
+  curl -fsSL https://raw.githubusercontent.com/<owner>/kios/master/install | bash
+  curl -fsSL https://raw.githubusercontent.com/<owner>/kios/master/install | bash -s -- --version 0.1.0
+
+Options:
+  -v, --version <version>  Install a specific version (for example 0.1.0)
+      --no-modify-path     Don't modify shell config files
+  -h, --help               Show this help
+
+Requires bun ${MIN_BUN} or newer (https://bun.sh) and kubectl on PATH.
+EOF
+}
+
+package_version() {
+  [[ "$1" =~ \"version\"[[:space:]]*:[[:space:]]*\"([^\"]+)\" ]] || return 0
+  printf '%s' "${BASH_REMATCH[1]}"
+}
+
+add_to_path() {
+  local config_file=$1
+  local command=$2
+
+  if grep -Fxq "$command" "$config_file"; then
+    printf "Command already exists in %s, skipping write.\n" "$config_file"
+  elif [[ -w "$config_file" ]]; then
+    printf "\n# kios\n%s\n" "$command" >> "$config_file"
+    path_added=true
+    printf "${MUTED}Added ${NC}kios ${MUTED}to \$PATH in ${NC}%s\n" "$config_file"
+  else
+    printf "Add this to %s:\n  %s\n" "$config_file" "$command"
+  fi
+}
+
+requested_version=${VERSION:-}
+no_modify_path=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    -v|--version)
+      if [[ -n "${2:-}" ]]; then
+        requested_version=$2
+        shift 2
+      else
+        printf "${RED}--version requires a version${NC}\n" >&2
+        exit 1
+      fi
+      ;;
+    --no-modify-path)
+      no_modify_path=true
+      shift
+      ;;
+    *)
+      printf "${RED}Unknown option: %s${NC}\n" "$1" >&2
+      exit 1
+      ;;
+  esac
+done
+
+if ! command -v curl >/dev/null 2>&1; then
+  printf "${RED}curl is required${NC}\n" >&2
+  exit 1
+fi
+if ! command -v tar >/dev/null 2>&1; then
+  printf "${RED}tar is required${NC}\n" >&2
+  exit 1
+fi
+
+if command -v bun >/dev/null 2>&1; then
+  bun_bin=$(command -v bun)
+elif [[ -x "$HOME/.bun/bin/bun" ]]; then
+  bun_bin=$HOME/.bun/bin/bun
+else
+  printf "${RED}kios needs bun %s or newer: https://bun.sh${NC}\n" "$MIN_BUN" >&2
+  exit 1
+fi
+
+bun_version=$("$bun_bin" --version)
+bun_version=${bun_version#bun-}
+if ! printf '%s\n%s\n' "$MIN_BUN" "$bun_version" | sort -V -C; then
+  printf "${RED}kios needs bun %s or newer (found %s)${NC}\n" "$MIN_BUN" "$bun_version" >&2
+  exit 1
+fi
+
+if [[ -n "$requested_version" ]]; then
+  specific_version=${requested_version#v}
+else
+  metadata=$(curl -fsSL "https://registry.npmjs.org/$NPM_PACKAGE/latest") || {
+    printf "${RED}Failed to fetch the latest kios version from npm${NC}\n" >&2
+    exit 1
+  }
+  specific_version=$(package_version "$metadata")
+  if [[ -z "$specific_version" ]]; then
+    printf "${RED}Failed to read the latest kios version${NC}\n" >&2
+    exit 1
+  fi
+fi
+
+if [[ ! "$specific_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+  printf "${RED}Invalid version: %s${NC}\n" "$specific_version" >&2
+  exit 1
+fi
+
+http_status=$(curl -s -o /dev/null -w "%{http_code}" "https://registry.npmjs.org/$NPM_PACKAGE/$specific_version" || true)
+if [[ "$http_status" == "404" ]]; then
+  printf "${RED}Version %s is not on npm${NC}\n" "$specific_version" >&2
+  exit 1
+fi
+if [[ "$http_status" != "200" ]]; then
+  printf "${RED}Failed to fetch kios %s from npm (HTTP %s)${NC}\n" "$specific_version" "$http_status" >&2
+  exit 1
+fi
+
+if [[ -f "$LIB_DIR/package.json" ]]; then
+  installed=$(package_version "$(cat "$LIB_DIR/package.json")")
+  if [[ -n "$installed" ]]; then
+    printf "${MUTED}Installed version: ${NC}%s\n" "$installed"
+  fi
+fi
+
+printf "${MUTED}Installing ${NC}kios ${MUTED}%s${NC}\n" "$specific_version"
+
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/kios-install.XXXXXX")
+trap 'rm -rf "$tmp"' EXIT
+curl -fsSL -o "$tmp/kios.tgz" "https://registry.npmjs.org/$NPM_PACKAGE/-/$APP-$specific_version.tgz"
+tar -xzf "$tmp/kios.tgz" -C "$tmp"
+
+# The npm tarball has no lockfile. --production still installs the pinned dependency versions.
+(cd "$tmp/package" && "$bun_bin" install --production)
+
+rm -rf "$LIB_DIR"
+mkdir -p "$(dirname "$LIB_DIR")" "$INSTALL_DIR"
+mv "$tmp/package" "$LIB_DIR"
+cat > "$INSTALL_DIR/kios" <<EOF
+#!/bin/sh
+exec $(printf '%q' "$bun_bin") $(printf '%q' "$LIB_DIR/src/index.tsx") "\$@"
+EOF
+chmod 755 "$INSTALL_DIR/kios"
+
+path_added=false
+if [[ "$no_modify_path" == "true" ]]; then
+  if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+    printf "Add this to your shell config:\n  export PATH=%s:\$PATH\n" "$INSTALL_DIR"
+  fi
+else
+  XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}
+  current_shell=$(basename "${SHELL:-sh}")
+  config_files=()
+  case "$current_shell" in
+    fish)
+      config_files=("$HOME/.config/fish/config.fish")
+      ;;
+    zsh)
+      zdot=${ZDOTDIR:-$HOME}
+      config_files=("$zdot/.zshrc" "$zdot/.zshenv" "$XDG_CONFIG_HOME/zsh/.zshrc" "$XDG_CONFIG_HOME/zsh/.zshenv")
+      ;;
+    bash)
+      config_files=("$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile" "$XDG_CONFIG_HOME/bash/.bashrc" "$XDG_CONFIG_HOME/bash/.bash_profile")
+      ;;
+    *)
+      config_files=("$HOME/.bashrc" "$HOME/.bash_profile" "$XDG_CONFIG_HOME/bash/.bashrc" "$XDG_CONFIG_HOME/bash/.bash_profile")
+      ;;
+  esac
+
+  config_file=""
+  for file in "${config_files[@]}"; do
+    if [[ -f "$file" ]]; then
+      config_file=$file
+      break
+    fi
+  done
+
+  if [[ -z "$config_file" ]]; then
+    new_config=""
+    case "$current_shell" in
+      zsh) new_config="${ZDOTDIR:-$HOME}/.zshrc" ;;
+      fish) new_config="$HOME/.config/fish/config.fish" ;;
+    esac
+    if [[ -n "$new_config" ]] && mkdir -p "$(dirname "$new_config")" && touch "$new_config"; then
+      config_file=$new_config
+    fi
+  fi
+
+  if [[ -z "$config_file" ]]; then
+    printf "Add this to your shell config:\n  export PATH=%s:\$PATH\n" "$INSTALL_DIR"
+  elif [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+    case "$current_shell" in
+      fish) add_to_path "$config_file" "fish_add_path $INSTALL_DIR" ;;
+      *) add_to_path "$config_file" "export PATH=$INSTALL_DIR:\$PATH" ;;
+    esac
+  fi
+fi
+
+if [[ -n "${GITHUB_PATH:-}" ]]; then
+  printf "%s\n" "$INSTALL_DIR" >> "$GITHUB_PATH"
+fi
+
+printf "\nInstalled kios %s\n" "$specific_version"
+if [[ "$path_added" == "true" ]]; then
+  printf "Open a new terminal so PATH includes %s\n" "$INSTALL_DIR"
+fi
+printf "kios needs kubectl on your PATH.\n"

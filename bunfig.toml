@@ -1,0 +1,4 @@
+preload = ["@opentui/solid/preload", "./src/solid-client.ts"]
+
+[test]
+preload = ["@opentui/solid/preload", "./src/solid-client.ts"]
