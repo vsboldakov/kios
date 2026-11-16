@@ -54,6 +54,66 @@ test("shows each metric's current value against its target", () => {
   expect(cell("replicas", {})).toEqual({ text: "" })
 })
 
+test("pairs a current metric with its spec when status order or length differs", () => {
+  expect(hpaTargets({
+    spec: {
+      metrics: [
+        { type: "Resource", resource: { name: "cpu", target: { averageUtilization: 50 } } },
+        { type: "Resource", resource: { name: "memory", target: { averageValue: "100Mi" } } },
+      ],
+    },
+    status: {
+      currentMetrics: [
+        { type: "Resource", resource: { name: "memory", current: { averageValue: "20Mi" } } },
+      ],
+    },
+  })).toBe("cpu: <unknown>/50%, memory: 20Mi/100Mi")
+
+  expect(hpaTargets({
+    spec: {
+      metrics: [
+        { type: "ContainerResource", containerResource: { name: "cpu", container: "app", target: { averageUtilization: 50 } } },
+        { type: "ContainerResource", containerResource: { name: "cpu", container: "sidecar", target: { averageUtilization: 70 } } },
+      ],
+    },
+    status: {
+      currentMetrics: [
+        { type: "ContainerResource", containerResource: { name: "cpu", container: "sidecar", current: { averageUtilization: 9 } } },
+        { type: "ContainerResource", containerResource: { name: "cpu", container: "app", current: { averageUtilization: 80 } } },
+      ],
+    },
+  })).toBe("cpu(app): 80%/50%, cpu(sidecar): 9%/70%")
+
+  expect(hpaTargets({
+    spec: {
+      metrics: [
+        { type: "External", external: { metric: { name: "queue", selector: { matchLabels: { lane: "a" } } }, target: { value: "10" } } },
+        { type: "External", external: { metric: { name: "queue", selector: { matchLabels: { lane: "b" } } }, target: { value: "4" } } },
+      ],
+    },
+    status: {
+      currentMetrics: [
+        { type: "External", external: { metric: { name: "queue", selector: { matchLabels: { lane: "b" } } }, current: { value: "3" } } },
+        { type: "External", external: { metric: { name: "queue", selector: { matchLabels: { lane: "a" } } }, current: { value: "9" } } },
+      ],
+    },
+  })).toBe("9/10, 3/4")
+
+  expect(hpaTargets({
+    spec: {
+      metrics: [
+        { type: "Object", object: { describedObject: { apiVersion: "v1", kind: "Service", name: "frontend" }, metric: { name: "hits" }, target: { value: "10" } } },
+        { type: "Object", object: { describedObject: { apiVersion: "networking.k8s.io/v1", kind: "Service", name: "frontend" }, metric: { name: "hits" }, target: { value: "20" } } },
+      ],
+    },
+    status: {
+      currentMetrics: [
+        { type: "Object", object: { describedObject: { apiVersion: "networking.k8s.io/v1", kind: "Service", name: "frontend" }, metric: { name: "hits" }, current: { value: "2" } } },
+      ],
+    },
+  })).toBe("<unknown>/10, 2/20")
+})
+
 test("formats the other metric kinds and a v1 cpu target", () => {
   expect(hpaTargets({
     spec: { metrics: [{ type: "External", external: { target: { averageValue: "30" } } }] },
@@ -67,9 +127,9 @@ test("formats the other metric kinds and a v1 cpu target", () => {
     spec: { metrics: [{ type: "Object", object: { target: { averageValue: "3" } } }] },
   })).toBe("<unknown>/3 (avg)")
   expect(hpaTargets({
-    spec: { metrics: [{ type: "ContainerResource", containerResource: { name: "cpu", target: {} } }] },
-    status: { currentMetrics: [{ type: "ContainerResource", containerResource: { current: { averageUtilization: 4 } } }] },
-  })).toBe("cpu: 4%/<auto>")
+    spec: { metrics: [{ type: "ContainerResource", containerResource: { name: "cpu", container: "app", target: {} } }] },
+    status: { currentMetrics: [{ type: "ContainerResource", containerResource: { name: "cpu", container: "app", current: { averageUtilization: 4 } } }] },
+  })).toBe("cpu(app): 4%/<auto>")
   expect(hpaTargets({ spec: { metrics: [{ type: "Weird" }] } })).toBe("<unknown type>")
   expect(hpaTargets({})).toBe("<none>")
   expect(hpaTargets({ spec: { targetCPUUtilizationPercentage: 80 }, status: { currentCPUUtilizationPercentage: 10 } })).toBe("cpu: 10%/80%")

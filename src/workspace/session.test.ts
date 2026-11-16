@@ -193,6 +193,22 @@ test("keeps a name filter on each tab and a separate one for containers", () => 
   })
 })
 
+test("keeps the namespace filter across tabs", () => {
+  withSession((session) => {
+    session.setFilter("api")
+    session.setNamespaceFilter("kube")
+    session.newTab()
+    expect(session.filter()).toBe("")
+    expect(session.namespaceFilter()).toBe("kube")
+    session.cycleTab(-1)
+    expect(session.filter()).toBe("api")
+    expect(session.namespaceFilter()).toBe("kube")
+    session.setNamespaceFilter("")
+    expect(session.namespaceFilter()).toBe("")
+    expect(session.filter()).toBe("api")
+  })
+})
+
 test("keeps a separate row on each tab of one kind", () => {
   withSession((session) => {
     session.selectRow("deployments", 2)
@@ -215,6 +231,7 @@ test("routes keys to the focused zone", () => {
     let follows = 0
     let filters = 0
     let details = 0
+    let copies = 0
     const actions = {
       focus: session.focus,
       toggleFocus: () => session.setFocus(session.focus() === "sidebar" ? "list" : "sidebar"),
@@ -254,6 +271,9 @@ test("routes keys to the focused zone", () => {
       startFilter: () => {
         filters += 1
       },
+      copyDetail: () => {
+        copies += 1
+      },
     }
 
     session.moveSidebar(1)
@@ -264,6 +284,8 @@ test("routes keys to the focused zone", () => {
     runKey({ name: "f" }, actions)
     expect(filters).toBe(1)
     expect(follows).toBe(0)
+    runKey({ name: "c" }, actions)
+    expect(copies).toBe(0)
     runKey({ name: "right" }, actions)
     runKey({ name: "left" }, actions)
     expect(controlledMoves).toBe(1)
@@ -285,6 +307,12 @@ test("routes keys to the focused zone", () => {
     expect(ownerMoves).toBe(1)
     expect(controlledMoves).toBe(1)
     expect(session.focus()).toBe("detail")
+    runKey({ name: "c" }, actions)
+    expect(copies).toBe(1)
+    runKey({ name: "c", repeated: true }, actions)
+    expect(copies).toBe(1)
+    runKey({ name: "c", ctrl: true }, actions)
+    expect(copies).toBe(1)
     runKey({ name: "f" }, actions)
     expect(filters).toBe(1)
     expect(follows).toBe(1)
@@ -301,11 +329,15 @@ test("routes keys to the focused zone", () => {
     expect(details).toBe(1)
     runKey({ name: "left" }, actions)
     runKey({ name: "right" }, actions)
-    expect(ownerMoves).toBe(2)
-    expect(controlledMoves).toBe(2)
+    expect(ownerMoves).toBe(1)
+    expect(controlledMoves).toBe(1)
     expect(session.detail()?.logs).toBe(true)
+    runKey({ name: "c" }, actions)
+    expect(copies).toBe(2)
     runKey({ name: "tab" }, actions)
     expect(session.focus()).toBe("sidebar")
+    runKey({ name: "c" }, actions)
+    expect(copies).toBe(2)
     runKey({ name: "]" }, actions)
     expect(session.activeId()).toBe("deployments")
     expect(session.tabs()).toHaveLength(2)

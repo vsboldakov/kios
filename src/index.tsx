@@ -1,13 +1,60 @@
 #!/usr/bin/env bun
 import "@opentui/solid/preload"
 import "./solid-client"
+import arg from "arg"
+
+const usage = `Usage: kios [--context name] [-n namespace]
+
+  -c, --context <name>    kubeconfig context
+  -n, --namespace <name>  namespace to open
+  -h, --help              show this help`
+
+const flags = readFlags(Bun.argv.slice(2))
+if ("help" in flags) {
+  console.log(usage)
+  process.exit(0)
+}
+if ("error" in flags) {
+  console.error(flags.error)
+  console.error(`\n${usage}`)
+  process.exit(1)
+}
 
 const { render } = await import("@opentui/solid")
 const { App } = await import("./app")
 const { createKubectlClient } = await import("./cluster/kubectl")
 
 // shortcut: letters show only if the terminal reports shift itself, drop these flags when the renderer exposes that directly
-await render(() => <App client={createKubectlClient()} />, {
+await render(() => <App client={createKubectlClient(flags.context)} namespace={flags.namespace} />, {
   exitOnCtrlC: true,
   useKittyKeyboard: { events: true, allKeysAsEscapes: true },
 })
+
+function readFlags(argv: string[]) {
+  try {
+    const parsed = arg(
+      {
+        "--help": Boolean,
+        "--context": requiredValue,
+        "--namespace": requiredValue,
+        "-h": "--help",
+        "-c": "--context",
+        "-n": "--namespace",
+      },
+      { argv },
+    )
+    if (parsed["--help"]) return { help: true }
+    const extra = parsed._[0]
+    if (extra) return { error: `unexpected argument: ${extra}` }
+    return { context: parsed["--context"] ?? "", namespace: parsed["--namespace"] ?? "" }
+  } catch (error) {
+    if (error instanceof arg.ArgError) return { error: error.message }
+    throw error
+  }
+}
+
+function requiredValue(input: string, name: string) {
+  const value = input.trim()
+  if (value) return value
+  throw new arg.ArgError(`option requires argument: ${name}`, "ARG_MISSING_REQUIRED_LONGARG")
+}

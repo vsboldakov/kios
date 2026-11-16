@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { lookupResource, readWatchChunk, scopePath } from "./kubectl"
+import { lookupResource, readWatchChunk, scopePath, withContext } from "./kubectl"
 
 const table = `
 pods po v1 true Pod get,list,watch
@@ -28,6 +28,11 @@ test("a forbidden watch status ends the stream", () => {
   expect(denied).toEqual({ events: [{ type: "unwatchable" }], carry: "", ended: true })
   const status = readWatchChunk("", '{"kind":"Status","reason":"Forbidden","code":403}\n')
   expect(status).toEqual({ events: [{ type: "unwatchable" }], carry: "", ended: true })
+})
+
+test("prefixes kubectl args with the launch context", () => {
+  expect(withContext("", ["get", "ns"])).toEqual(["get", "ns"])
+  expect(withContext("prod", ["get", "pods", "-n", "payments"])).toEqual(["--context", "prod", "get", "pods", "-n", "payments"])
 })
 
 test("scopes a resource path to a namespace", () => {

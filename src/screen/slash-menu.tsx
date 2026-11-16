@@ -6,6 +6,7 @@ import { Keyed } from "./keyed"
 import { isWorkload, resourceKinds } from "../resources"
 import { currentTarget, listedItems } from "../workspace/selection"
 import { matchSlash, slashItems, type SlashItem } from "../workspace/slash"
+import { namespaceOptions } from "./namespace-list"
 import { theme } from "./theme"
 
 // shortcut: 8 rows, raise it when the menu should show a longer page
@@ -90,6 +91,8 @@ export function SlashMenu(props: {
       return
     }
     if (item.type === "namespace") {
+      session.setNamespaceFilter("")
+      session.setNamespaceIndex(Math.max(0, namespaceOptions(cluster.namespaceLocked(), cluster.namespaces()).indexOf(item.value)))
       cluster.setNamespace(item.value)
       return
     }

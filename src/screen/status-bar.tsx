@@ -3,7 +3,7 @@ import { useCluster, useSession } from "../context"
 import { findKind, podContainers, sidebarLabel } from "../resources"
 import { nameMatches } from "../workspace/filter"
 import { listedItems, scopedPod } from "../workspace/selection"
-import { namespaceOptions } from "./namespace-list"
+import { filteredNamespaces, namespaceLabel } from "./namespace-list"
 import { theme } from "./theme"
 
 export function StatusBar(props: { filtering: boolean }) {
@@ -16,9 +16,9 @@ export function StatusBar(props: { filtering: boolean }) {
       return tab.resource.namespace ? `${tab.resource.namespace}/${tab.resource.name}` : tab.resource.name
     }
     if (session.focus() === "namespaces") {
-      const names = namespaceOptions(cluster.namespaceLocked(), cluster.namespaces())
-      const name = names[Math.min(session.namespaceIndex(), Math.max(names.length - 1, 0))] ?? ""
-      return name || "all namespaces"
+      const names = filteredNamespaces(cluster.namespaceLocked(), cluster.namespaces(), session.namespaceFilter())
+      if (names.length === 0) return ""
+      return namespaceLabel(names[Math.min(session.namespaceIndex(), names.length - 1)] ?? "")
     }
     if (session.focus() === "sidebar") return sidebarLabel(findKind(session.menu()[session.sidebarIndex()]?.id ?? "", cluster.extraKinds())?.label ?? "")
     const scope = session.activeId() === "pods" ? session.containerScope() : null
@@ -56,10 +56,12 @@ export function StatusBar(props: { filtering: boolean }) {
       return session.containerFilter() ? "d describe   f filter   esc clear" : "d describe   f filter   shift sort"
     }
     if (focus === "detail" && session.detail()?.logs) {
-      return `d describe   ← parent   → child   f ${session.detail()?.follow ? "following" : "follow"}   [ ] tabs${closeHint()}   esc back`
+      return `d describe   c copy   f ${session.detail()?.follow ? "following" : "follow"}   [ ] tabs${closeHint()}   esc back`
     }
-    if (focus === "detail") return `d describe   ← → view   esc back${logsHint()}   [ ] tabs${closeHint()}`
-    if (focus === "namespaces") return `enter select   [ ] tabs${closeHint()}`
+    if (focus === "detail") return `d describe   c copy   ← → view   esc back${logsHint()}   [ ] tabs${closeHint()}`
+    if (focus === "namespaces") {
+      return `enter select   f filter${session.namespaceFilter() ? "   esc clear" : ""}   [ ] tabs${closeHint()}`
+    }
     if (focus === "sidebar") return `enter open   t new   [ ] tabs${closeHint()}`
     return `← parent   → child   d describe   t new   [ ] tabs${closeHint()}   e edit${logsHint()}   / menu   shift sort`
   }

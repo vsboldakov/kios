@@ -23,7 +23,7 @@ Sidebar labels follow the kind rules in [`AGENTS.md`](./AGENTS.md).
 
 ## Development
 
-kios needs [Bun](https://bun.sh) `>=1.3.5` (the `engines` field in [`package.json`](./package.json)) and a `kubectl` binary on `PATH`. `KIOS_KUBECTL` selects another binary path. It uses your current kubeconfig context. From the repository root:
+kios needs [Bun](https://bun.sh) `>=1.3.5` (the `engines` field in [`package.json`](./package.json)) and a `kubectl` binary on `PATH`. `KIOS_KUBECTL` selects another binary path. It uses your current kubeconfig context. `--context` and `-n` choose a context and a namespace. From the repository root:
 
 ```bash
 bun install

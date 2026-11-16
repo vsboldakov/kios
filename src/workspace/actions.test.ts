@@ -132,6 +132,10 @@ test("KIOS_KUBECTL replaces the kubectl binary on the command line", () => {
 
 test("prints the shell equivalent of an edit command", () => {
   expect(commandLine(editCommand("nodes", "cordon", { name: "worker", namespace: "" })!)).toBe("kubectl cordon worker")
+  expect(commandLine(editCommand("nodes", "cordon", { name: "worker", namespace: "" })!, "prod")).toBe("kubectl --context prod cordon worker")
+  expect(commandLine(editCommand("pods", "shell", target)!, "my prod")).toBe(
+    "kubectl --context 'my prod' exec -i -t -n default api -- sh -c 'clear; (bash || ash || sh)'",
+  )
   expect(commandLine(editCommand("replicasets", "scale", { ...target, replicas: 3 })!)).toBe(
     "kubectl scale replicasets/api --replicas=3 -n default",
   )

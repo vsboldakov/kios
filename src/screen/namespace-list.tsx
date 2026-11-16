@@ -1,7 +1,9 @@
 import type { ScrollBoxRenderable } from "@opentui/core"
 import { createEffect, createMemo } from "solid-js"
 import { useCluster, useSession } from "../context"
+import { nameMatches } from "../workspace/filter"
 import { Keyed } from "./keyed"
+import { ListFilter, MatchedText } from "./list-filter"
 import { fit } from "../resources"
 import { sidebarWidth, splitBorder, theme } from "./theme"
 
@@ -9,10 +11,25 @@ export function namespaceOptions(locked: boolean, names: readonly string[]): rea
   return locked ? names : ["", ...names]
 }
 
-export function NamespaceList() {
+export function namespaceLabel(name: string): string {
+  return name || "all namespaces"
+}
+
+export function filteredNamespaces(locked: boolean, names: readonly string[], query: string): readonly string[] {
+  const options = namespaceOptions(locked, names)
+  if (!query) return options
+  return options.filter((name) => nameMatches(namespaceLabel(name), query))
+}
+
+export function NamespaceList(props: {
+  filtering: boolean
+  onFilter: (value: string) => void
+  onSubmit: () => void
+  onEdit: () => void
+}) {
   const session = useSession()
   const cluster = useCluster()
-  const options = createMemo(() => namespaceOptions(cluster.namespaceLocked(), cluster.namespaces()))
+  const options = createMemo(() => filteredNamespaces(cluster.namespaceLocked(), cluster.namespaces(), session.namespaceFilter()))
   const cursor = createMemo(() => {
     const count = options().length
     if (count === 0) return 0
@@ -41,6 +58,13 @@ export function NamespaceList() {
           Namespaces
         </text>
       </box>
+      <ListFilter
+        query={session.namespaceFilter()}
+        editing={props.filtering}
+        onInput={props.onFilter}
+        onSubmit={props.onSubmit}
+        onEdit={props.onEdit}
+      />
       <scrollbox
         ref={(value: ScrollBoxRenderable) => {
           scroller = value
@@ -83,7 +107,11 @@ function NamespaceRow(props: { name: string; index: number; cursor: number }) {
     >
       {/* shortcut: names longer than the column are cut, widen sidebarWidth when a namespace needs its full name */}
       <text fg={cursor() ? theme.selected : selected() ? theme.primary : theme.fg}>
-        {fit(props.name || "all namespaces", sidebarWidth - 3)}
+        {session.namespaceFilter() ? (
+          <MatchedText text={namespaceLabel(props.name)} query={session.namespaceFilter()} width={sidebarWidth - 3} covered={cursor()} />
+        ) : (
+          fit(namespaceLabel(props.name), sidebarWidth - 3)
+        )}
       </text>
     </box>
   )

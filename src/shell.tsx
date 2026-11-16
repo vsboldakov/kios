@@ -3,9 +3,11 @@ import { onBlur, useKeyboard, useRenderer, useSelectionHandler } from "@opentui/
 import { Show, createEffect, createMemo, createSignal, on } from "solid-js"
 import { ActionBar } from "./screen/action-bar"
 import { ConfirmDialog } from "./screen/confirm-dialog"
+import { CopiedToast } from "./screen/copied-toast"
+import { detailContent } from "./screen/detail-content"
 import { scrollDetail } from "./screen/detail-scroll"
 import { LogView } from "./screen/log-view"
-import { NamespaceList, namespaceOptions } from "./screen/namespace-list"
+import { NamespaceList, filteredNamespaces, namespaceLabel, namespaceOptions } from "./screen/namespace-list"
 import { ContainerList, containerColumns, orderedContainers } from "./screen/container-list"
 import { ResourceList } from "./screen/resource-list"
 import { ResourceView } from "./screen/resource-view"
@@ -48,11 +50,12 @@ export function Shell() {
         if (!prev) return
         const [focus, token] = next
         const [previousFocus, previousToken] = prev
-        if (focus !== "list" || token !== previousToken) setFiltering(false)
+        if (focus !== previousFocus || (focus === "list" && token !== previousToken)) setFiltering(false)
       },
       { defer: true },
     ),
   )
+  const [copied, setCopied] = createSignal(0)
   let clipboard: ReturnType<typeof createHostClipboard> | undefined
   const copyText = (text: string) => {
     if (renderer.capabilities?.osc52_support === "supported") {
@@ -164,6 +167,8 @@ export function Shell() {
     session.selectRow(wanted.kindId, index)
   })
 
+  const namespaceNames = () => filteredNamespaces(cluster.namespaceLocked(), cluster.namespaces(), session.namespaceFilter())
+
   const applyFilter = (next: string) => {
     const visible = visibleRows(session, cluster)
     if (!visible) return
@@ -178,6 +183,13 @@ export function Shell() {
     const index = rowAfterFilter(visible.rows, session.rowIndex(id), visible.query, next, (row) => row.metadata?.name ?? "")
     session.setFilter(next)
     session.setActiveRow(index)
+  }
+
+  const applyNamespaceFilter = (next: string) => {
+    const names = namespaceOptions(cluster.namespaceLocked(), cluster.namespaces())
+    const index = rowAfterFilter(names, session.namespaceIndex(), session.namespaceFilter(), next, namespaceLabel)
+    session.setNamespaceFilter(next)
+    session.setNamespaceIndex(index)
   }
 
   const columnForLetter = (letter: string): string | null => {
@@ -220,9 +232,10 @@ export function Shell() {
       return
     }
     // The focused input reads the key after this handler. stopPropagation would swallow it.
-    if (filtering() && session.focus() === "list") {
+    if (filtering() && (session.focus() === "list" || session.focus() === "namespaces")) {
       if (!key.ctrl && !key.meta && !key.super && key.name === "escape") {
-        applyFilter("")
+        if (session.focus() === "namespaces") applyNamespaceFilter("")
+        if (session.focus() === "list") applyFilter("")
         setFiltering(false)
       }
       return
@@ -238,7 +251,11 @@ export function Shell() {
       return
     }
     if (edit.handleKey(key)) return
-    if (key.name === "f" && !key.ctrl && !key.meta && !key.super && session.focus() === "list") key.preventDefault()
+    if (key.name === "f" && !key.ctrl && !key.meta && !key.super && (session.focus() === "list" || session.focus() === "namespaces")) key.preventDefault()
+    if (key.name === "escape" && session.focus() === "namespaces" && session.namespaceFilter()) {
+      applyNamespaceFilter("")
+      return
+    }
     if (key.name === "escape" && session.focus() === "list" && (containerScope() ? session.containerFilter() : session.filter())) {
       applyFilter("")
       return
@@ -254,18 +271,17 @@ export function Shell() {
           session.setFocus("list")
           return
         }
-        const names = namespaceOptions(cluster.namespaceLocked(), cluster.namespaces())
-        session.setNamespaceIndex(Math.max(0, names.indexOf(cluster.namespace())))
+        session.setNamespaceIndex(Math.max(0, namespaceNames().indexOf(cluster.namespace())))
         session.setFocus("namespaces")
       },
       closeNamespaces: () => session.setFocus("list"),
       moveNamespace: (delta) => {
-        session.moveNamespace(delta, namespaceOptions(cluster.namespaceLocked(), cluster.namespaces()).length)
+        session.moveNamespace(delta, namespaceNames().length)
       },
       openNamespace: () => {
-        const names = namespaceOptions(cluster.namespaceLocked(), cluster.namespaces())
-        const index = Math.min(session.namespaceIndex(), Math.max(names.length - 1, 0))
-        cluster.setNamespace(names[index] ?? "")
+        const names = namespaceNames()
+        if (names.length === 0) return
+        cluster.setNamespace(names[Math.min(session.namespaceIndex(), names.length - 1)] ?? "")
         session.setFocus("list")
       },
       moveSidebar: session.moveSidebar,
@@ -306,6 +322,12 @@ export function Shell() {
       cycleDetail: session.cycleDetail,
       scrollDetail,
       openNewTab: session.newTab,
+      copyDetail: () => {
+        const text = detailContent()
+        if (text == null) return
+        copyText(text)
+        setCopied((count) => count + 1)
+      },
       openLogs: () => {
         const visible = visibleRows(session, cluster)
         if (visible?.type === "containers" && session.focus() === "list") {
@@ -364,7 +386,7 @@ export function Shell() {
           <Show when={!viewing() && activeKind()}>
             <ListFilter
               query={containerScope() ? session.containerFilter() : session.filter()}
-              editing={filtering()}
+              editing={filtering() && session.focus() === "list"}
               onInput={applyFilter}
               onSubmit={() => setFiltering(false)}
               onEdit={() => {
@@ -397,7 +419,15 @@ export function Shell() {
             )}
           </Show>
         </box>
-        <NamespaceList />
+        <NamespaceList
+          filtering={filtering() && session.focus() === "namespaces"}
+          onFilter={applyNamespaceFilter}
+          onSubmit={() => setFiltering(false)}
+          onEdit={() => {
+            session.setFocus("namespaces")
+            setFiltering(true)
+          }}
+        />
       </box>
       <Show when={edit.editing() && edit.actions().length > 0}>
         <ActionBar
@@ -421,6 +451,9 @@ export function Shell() {
         {(item) => (
           <ConfirmDialog title={item().title} message={item().line} onConfirm={edit.accept} onCancel={edit.cancel} onCopy={copyText} />
         )}
+      </Show>
+      <Show when={copied()}>
+        <CopiedToast pulse={copied()} onDismiss={() => setCopied(0)} />
       </Show>
     </box>
   )

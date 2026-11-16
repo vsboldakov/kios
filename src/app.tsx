@@ -7,20 +7,20 @@ import { menuKinds, sidebarKinds } from "./resources"
 import { createSession } from "./workspace/session"
 import { Shell } from "./shell"
 
-export function App(props: { client: ClusterClient }) {
+export function App(props: { client: ClusterClient; namespace?: string }) {
   const session = createSession(menuKinds)
   return (
     <SessionContext.Provider value={session}>
-      <ClusterProvider client={props.client}>
+      <ClusterProvider client={props.client} namespace={props.namespace ?? ""}>
         <Shell />
       </ClusterProvider>
     </SessionContext.Provider>
   )
 }
 
-function ClusterProvider(props: { client: ClusterClient; children: JSX.Element }) {
+function ClusterProvider(props: { client: ClusterClient; namespace: string; children: JSX.Element }) {
   const session = useSession()
-  const cluster = createCluster(props.client)
+  const cluster = createCluster(props.client, props.namespace)
 
   createEffect(() => {
     const extra = cluster.extraKinds()

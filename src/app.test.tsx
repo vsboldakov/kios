@@ -1,3 +1,4 @@
+import { setRendererCapabilities } from "@opentui/core/testing"
 import { testRender } from "@opentui/solid"
 import { expect, test } from "bun:test"
 import { editCommand } from "./workspace/actions"
@@ -195,6 +196,103 @@ test("filters the list to the namespace chosen on the right", async () => {
   }
 })
 
+test("opens the context and namespace given at launch", async () => {
+  const scoped: ClusterClient = {
+    context: "prod",
+    async currentContext() {
+      return "demo"
+    },
+    async namespaces() {
+      return ["default", "payments"]
+    },
+    async list(kind: ResourceKind) {
+      if (kind.id !== "deployments") return []
+      return [resource("api", 1, 1, false, "payments"), resource("worker", 1, 1)]
+    },
+    async inspect() {
+      return { describe: "", yaml: "", json: "" }
+    },
+    async logs() {
+      return ""
+    },
+    followLogs() {
+      return () => {}
+    },
+    async execute() {},
+  }
+  const setup = await testRender(() => <App client={scoped} namespace="payments" />, { width: 112, height: 28 })
+  try {
+    await setup.waitForFrame((frame) => frame.includes("prod"))
+    setup.mockInput.pressTab()
+    setup.mockInput.pressArrow("down")
+    setup.mockInput.pressArrow("down")
+    setup.mockInput.pressKey("t")
+    const opened = await setup.waitForFrame((frame) => frame.includes("payments/api") && !frame.includes("worker"))
+    expect(opened).toContain("payments/Deployments")
+    expect(opened).toContain("all namespaces")
+    expect(opened).not.toContain("demo")
+  } finally {
+    await setup.dispose()
+  }
+})
+
+test("filters namespaces by part of a name", async () => {
+  const namespaced: ClusterClient = {
+    async currentContext() {
+      return "demo"
+    },
+    async namespaces() {
+      return ["kube-system", "default", "empty-ns"]
+    },
+    async list(kind: ResourceKind) {
+      if (kind.id !== "deployments") return []
+      return [resource("api", 2, 2), resource("worker", 1, 1, false, "kube-system")]
+    },
+    async inspect() {
+      return { describe: "", yaml: "", json: "" }
+    },
+    async logs() {
+      return ""
+    },
+    followLogs() {
+      return () => {}
+    },
+    async execute() {},
+  }
+  const setup = await testRender(() => <App client={namespaced} />, { width: 112, height: 28 })
+  try {
+    await setup.waitForFrame((frame) => frame.includes("Pods"))
+    setup.mockInput.pressTab()
+    setup.mockInput.pressArrow("down")
+    setup.mockInput.pressArrow("down")
+    setup.mockInput.pressEnter()
+    await setup.waitForFrame((frame) => frame.includes("default/api") && frame.includes("all namespaces"))
+    setup.mockInput.pressKey("n")
+    setup.mockInput.pressKey("f")
+    await setup.waitForFrame((frame) => frame.includes("enter list"))
+    await setup.mockInput.typeText("empty")
+    const filtered = await setup.waitForFrame((frame) => frame.includes("empty-ns") && !frame.includes("all namespaces"))
+    expect(filtered).toContain("filter:")
+    expect(filtered).toContain("api")
+    setup.mockInput.pressEscape()
+    await Bun.sleep(80)
+    const restored = await setup.waitForFrame((frame) => frame.includes("all namespaces") && frame.includes("enter select"))
+    expect(restored).not.toContain("filter:")
+    setup.mockInput.pressKey("f")
+    await setup.waitForFrame((frame) => frame.includes("enter list"))
+    await setup.mockInput.typeText("kube")
+    await setup.waitForFrame((frame) => frame.includes("kube-system") && !frame.includes("all namespaces"))
+    setup.mockInput.pressEnter()
+    await setup.waitForFrame((frame) => !frame.includes("enter list") && frame.includes("kube-system"))
+    setup.mockInput.pressEnter()
+    const onlySystem = await setup.waitForFrame((frame) => frame.includes("worker") && !frame.includes("api"))
+    expect(onlySystem).toContain("kube-system/worker")
+    expect(onlySystem).toContain("filter:")
+  } finally {
+    await setup.dispose()
+  }
+})
+
 test("opens describe, yaml, and json for the selected resource", async () => {
   const inspected: ClusterClient = {
     async currentContext() {
@@ -294,6 +392,9 @@ test("shows logs for a selected workload and hides the hint otherwise", async ()
     setup.mockInput.pressKey("l")
     const logs = await setup.waitForFrame((frame) => frame.includes("LOG api"))
     expect(logs).toContain("f follow")
+    const hint = logs.split("\n").find((line) => line.includes("f follow")) ?? ""
+    expect(hint).not.toContain("←")
+    expect(hint).not.toContain("→")
     setup.mockInput.pressKey("f")
     const followed = await setup.waitForFrame((frame) => frame.includes("FOLLOW api"))
     expect(followed).toContain("f following")
@@ -309,6 +410,99 @@ test("shows logs for a selected workload and hides the hint otherwise", async ()
     setup.mockInput.pressKey("l")
     await setup.waitForVisualIdle()
     expect(setup.captureCharFrame()).not.toContain("LOG api")
+  } finally {
+    await setup.dispose()
+  }
+})
+
+test("copies describe, yaml, json, and logs with c", async () => {
+  const yaml = "YAML api\nkind: Deployment"
+  const json = '{\n  "name": "api"\n}'
+  const inspected: ClusterClient = {
+    async currentContext() {
+      return "demo"
+    },
+    async namespaces() {
+      return ["default"]
+    },
+    async list(kind: ResourceKind) {
+      if (kind.id !== "deployments") return []
+      return [resource("api", 2, 2)]
+    },
+    async inspect() {
+      return { describe: "DESCRIBE api", yaml, json }
+    },
+    async logs() {
+      return "LOG api"
+    },
+    followLogs(_kind: ResourceKind, name: string, _namespace: string, onText: (text: string) => void) {
+      onText(`FOLLOW ${name}\nready`)
+      return () => {}
+    },
+    async execute() {},
+  }
+  const setup = await testRender(() => <App client={inspected} />, { width: 112, height: 28 })
+  const copied: string[] = []
+  setRendererCapabilities(setup.renderer, { osc52_support: "supported" })
+  setup.renderer.copyToClipboardOSC52 = (text: string) => {
+    copied.push(text)
+    return true
+  }
+  try {
+    await setup.waitForFrame((frame) => frame.includes("Pods"))
+    setup.mockInput.pressKey("c")
+    await setup.waitForVisualIdle()
+    expect(copied).toEqual([])
+    expect(setup.captureCharFrame()).not.toContain("Copied to clipboard")
+
+    setup.mockInput.pressTab()
+    setup.mockInput.pressArrow("down")
+    setup.mockInput.pressArrow("down")
+    setup.mockInput.pressEnter()
+    await setup.waitForFrame((frame) => frame.includes("default/api"))
+    setup.mockInput.pressEnter()
+    const described = await setup.waitForFrame((frame) => frame.includes("DESCRIBE api"))
+    expect(described).toContain("c copy")
+    setup.mockInput.pressKey("c")
+    const toast = await setup.waitForFrame((frame) => frame.includes("Copied to clipboard"))
+    expect(toast).toContain("DESCRIBE api")
+    expect(copied).toEqual(["DESCRIBE api"])
+    const notice = locate(setup, "Copied to clipboard")
+    await setup.mockMouse.click(notice.x, notice.y)
+    await setup.waitForFrame((frame) => !frame.includes("Copied to clipboard"))
+
+    setup.mockInput.pressArrow("right")
+    const yamlView = await setup.waitForFrame((frame) => frame.includes("kind: Deployment"))
+    expect(yamlView).toContain("c copy")
+    setup.mockInput.pressKey("c")
+    await setup.waitForFrame((frame) => frame.includes("Copied to clipboard"))
+    expect(copied).toEqual(["DESCRIBE api", yaml])
+
+    setup.mockInput.pressArrow("right")
+    await setup.waitForFrame((frame) => frame.includes('"name": "api"'))
+    setup.mockInput.pressKey("c")
+    await setup.waitForFrame((frame) => frame.includes("Copied to clipboard"))
+    expect(copied).toEqual(["DESCRIBE api", yaml, json])
+
+    setup.mockInput.pressKey("l")
+    const logs = await setup.waitForFrame((frame) => frame.includes("LOG api"))
+    expect(logs).toContain("c copy")
+    setup.mockInput.pressKey("c")
+    await setup.waitForFrame((frame) => frame.includes("Copied to clipboard"))
+    expect(copied).toEqual(["DESCRIBE api", yaml, json, "LOG api"])
+
+    setup.mockInput.pressKey("f")
+    await setup.waitForFrame((frame) => frame.includes("FOLLOW api") && frame.includes("ready"))
+    setup.mockInput.pressKey("c")
+    await setup.waitForFrame((frame) => frame.includes("Copied to clipboard"))
+    expect(copied).toEqual(["DESCRIBE api", yaml, json, "LOG api", "FOLLOW api\nready"])
+
+    setup.mockInput.pressEscape()
+    await Bun.sleep(80)
+    await setup.waitForFrame((frame) => frame.includes("default/api") && !frame.includes("FOLLOW api"))
+    setup.mockInput.pressKey("c")
+    await setup.waitForVisualIdle()
+    expect(copied).toEqual(["DESCRIBE api", yaml, json, "LOG api", "FOLLOW api\nready"])
   } finally {
     await setup.dispose()
   }
@@ -582,12 +776,22 @@ test("opens a slash menu for kinds, namespaces, and actions", async () => {
       return Boolean(line?.includes("kube-system/worker"))
     })
 
+    setup.mockInput.pressKey("n")
+    setup.mockInput.pressKey("f")
+    await setup.waitForFrame((frame) => frame.includes("enter list"))
+    await setup.mockInput.typeText("default")
+    const narrowed = await setup.waitForFrame((frame) => frame.includes("filter:") && !frame.includes("all namespaces"))
+    expect(narrowed).toContain("default")
+    setup.mockInput.pressEnter()
+    await setup.waitForFrame((frame) => frame.includes("filter:") && !frame.includes("enter list"))
+
     setup.mockInput.pressKey("/")
     await setup.mockInput.typeText("kube-system")
     const namespace = await setup.waitForFrame((frame) => row(frame, "kube-system", "namespace"))
     expect(namespace).toContain("Commands")
     setup.mockInput.pressEnter()
-    await setup.waitForFrame((frame) => frame.includes("worker") && !frame.includes("api"))
+    const switched = await setup.waitForFrame((frame) => frame.includes("worker") && !frame.includes("api") && frame.includes("all namespaces"))
+    expect(switched).not.toContain("filter:")
 
     setup.mockInput.pressKey("/")
     await setup.mockInput.typeText("logs")

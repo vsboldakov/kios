@@ -1,27 +1,12 @@
 import { RGBA } from "@opentui/core"
 import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
-import { Show, createSignal, onCleanup } from "solid-js"
+import { Show, createSignal } from "solid-js"
+import { CopiedToast } from "./copied-toast"
 import { theme } from "./theme"
 
 const submit = new Set(["return", "enter", "linefeed"])
 
 const choices = ["copy", "cancel", "confirm"] as const
-const toastMs = 5000
-
-// Only the side bars are drawn; the other edges stay empty.
-const toastBorder = {
-  topLeft: "",
-  topRight: "",
-  bottomLeft: "",
-  bottomRight: "",
-  horizontal: " ",
-  vertical: "┃",
-  topT: "",
-  bottomT: "",
-  leftT: "",
-  rightT: "",
-  cross: "",
-}
 
 export function ConfirmDialog(props: {
   title: string
@@ -32,28 +17,12 @@ export function ConfirmDialog(props: {
 }) {
   const dimensions = useTerminalDimensions()
   const [active, setActive] = createSignal<(typeof choices)[number]>("confirm")
-  const [copied, setCopied] = createSignal(false)
+  const [copied, setCopied] = createSignal(0)
   const panelWidth = () => Math.min(60, Math.max(24, dimensions().width - 2))
-  let hide: ReturnType<typeof setTimeout> | undefined
-  const clearHide = () => {
-    if (!hide) return
-    clearTimeout(hide)
-    hide = undefined
-  }
-  const arm = () => {
-    clearHide()
-    hide = setTimeout(() => setCopied(false), toastMs)
-  }
   const copy = () => {
     props.onCopy(props.message)
-    setCopied(true)
-    arm()
+    setCopied((count) => count + 1)
   }
-  const dismiss = () => {
-    clearHide()
-    setCopied(false)
-  }
-  onCleanup(clearHide)
 
   useKeyboard((key) => {
     key.preventDefault()
@@ -119,43 +88,7 @@ export function ConfirmDialog(props: {
         </box>
       </box>
       <Show when={copied()}>
-        <box
-          position="absolute"
-          top={1}
-          right={2}
-          maxWidth={Math.min(60, dimensions().width - 6)}
-          border={["left", "right"]}
-          borderColor={theme.primary}
-          customBorderChars={toastBorder}
-          zIndex={1}
-          onMouseDown={(event) => event.stopPropagation()}
-          onMouseOver={clearHide}
-          onMouseOut={() => {
-            if (copied()) arm()
-          }}
-          onMouseUp={(event) => {
-            event.stopPropagation()
-            dismiss()
-          }}
-        >
-          <box
-            width="100%"
-            flexDirection="row"
-            gap={2}
-            paddingLeft={2}
-            paddingRight={2}
-            paddingTop={1}
-            paddingBottom={1}
-            backgroundColor={theme.panel}
-          >
-            <text fg={theme.fg} wrapMode="word" selectable={false}>
-              Copied to clipboard
-            </text>
-            <text fg={theme.muted} selectable={false}>
-              x
-            </text>
-          </box>
-        </box>
+        <CopiedToast pulse={copied()} onDismiss={() => setCopied(0)} />
       </Show>
     </box>
   )

@@ -9,6 +9,7 @@ function cluster(items: KubernetesObject[]): Cluster {
   const snapshot: ResourceSnapshot = { status: "ready", items, error: null, updatedAt: null, live: false, cached: false }
   return {
     contextName: () => "",
+    launchContext: () => "",
     namespaces: () => [],
     namespace: () => "",
     namespaceLocked: () => false,

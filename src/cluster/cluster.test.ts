@@ -268,6 +268,63 @@ test("polls after a watch is forbidden", async () => {
   }
 })
 
+test("shows the launch context without asking kubectl", async () => {
+  let called = false
+  const root = createRoot((dispose) => {
+    const cluster = createCluster(stub({
+      context: "prod",
+      async currentContext() {
+        called = true
+        return "demo"
+      },
+    }))
+    cluster.syncWatches(["pods"])
+    return { dispose, cluster }
+  })
+  try {
+    expect(root.cluster.contextName()).toBe("prod")
+    expect(root.cluster.launchContext()).toBe("prod")
+    await until(() => root.cluster.snapshot("pods").status === "ready")
+    expect(called).toBe(false)
+  } finally {
+    root.cluster.syncWatches([])
+    root.dispose()
+  }
+})
+
+test("uses the launch namespace when listing namespaces is forbidden", async () => {
+  const watched: string[] = []
+  let onEvents: ((events: WatchEvent[]) => void) | undefined
+  const root = createRoot((dispose) => {
+    const cluster = createCluster(stub({
+      async namespaces() {
+        throw new ClientError("forbidden", "Error from server (Forbidden): namespaces is forbidden")
+      },
+      async contextNamespace() {
+        return "team"
+      },
+      watch(_kind, callback, namespace) {
+        watched.push(namespace ?? "")
+        onEvents = callback
+        return () => {}
+      },
+    }), "payments")
+    cluster.syncWatches(["pods"])
+    return { dispose, cluster }
+  })
+  try {
+    expect(root.cluster.namespace()).toBe("payments")
+    onEvents?.([{ type: "forbidden", error: "Error from server (Forbidden): pods is forbidden" }])
+    await until(() => root.cluster.namespaceLocked())
+    expect(root.cluster.namespace()).toBe("payments")
+    expect(root.cluster.namespaces()).toEqual(["payments"])
+    expect(watched).toEqual(["", "payments"])
+  } finally {
+    root.cluster.syncWatches([])
+    root.dispose()
+  }
+})
+
 test("locks namespaced reads to the context namespace when listing namespaces is forbidden", async () => {
   const watched: string[] = []
   const listed: string[] = []

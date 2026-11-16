@@ -5,6 +5,7 @@ export interface KeyCommand {
   ctrl?: boolean
   meta?: boolean
   super?: boolean
+  repeated?: boolean
 }
 
 export interface WorkspaceActions {
@@ -30,6 +31,7 @@ export interface WorkspaceActions {
   openLogs: () => void
   toggleFollow: () => void
   startFilter: () => void
+  copyDetail: () => void
 }
 
 const down = new Set(["down", "j"])
@@ -76,7 +78,7 @@ export function runKey(key: KeyCommand, actions: WorkspaceActions): void {
   }
 
   if (key.name === "f") {
-    if (actions.focus() === "list") {
+    if (actions.focus() === "list" || actions.focus() === "namespaces") {
       actions.startFilter()
       return
     }
@@ -90,12 +92,11 @@ export function runKey(key: KeyCommand, actions: WorkspaceActions): void {
   }
 
   if (actions.focus() === "detail") {
+    if (key.name === "c" && !key.repeated) actions.copyDetail()
     if (down.has(key.name)) actions.scrollDetail(1)
     if (up.has(key.name)) actions.scrollDetail(-1)
     if (actions.formatView() && key.name === "left") actions.cycleDetail(-1)
     if (actions.formatView() && key.name === "right") actions.cycleDetail(1)
-    if (!actions.formatView() && key.name === "left") actions.showOwner()
-    if (!actions.formatView() && key.name === "right") actions.showControlled()
     if (close.has(key.name) || key.name === "escape") actions.closeDetail()
     return
   }

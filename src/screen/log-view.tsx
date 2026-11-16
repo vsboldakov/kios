@@ -2,14 +2,21 @@ import type { ScrollBoxRenderable } from "@opentui/core"
 import { For, createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 import { useCluster, useSession } from "../context"
 import { findKind } from "../resources"
+import { bindDetailContent } from "./detail-content"
 import { theme } from "./theme"
 import { bindDetailScroll, stickDetailScroll } from "./detail-scroll"
 
 export function LogView(props: { kindId: string; name: string; namespace: string }) {
   const session = useSession()
   const cluster = useCluster()
-  const [text, setText] = createSignal("Loading...")
-  const lines = createMemo(() => (text() || "No logs").split("\n"))
+  const [text, setText] = createSignal<string | null>(null)
+  const lines = createMemo(() => {
+    const current = text()
+    if (current == null) return ["Loading..."]
+    return (current || "No logs").split("\n")
+  })
+  const releaseDetail = bindDetailContent(() => text())
+  onCleanup(releaseDetail)
   const live = () => session.detail()?.follow ?? false
 
   createEffect(() => {
@@ -20,7 +27,7 @@ export function LogView(props: { kindId: string; name: string; namespace: string
     if (!kind) return
     let stale = false
     let stop = () => {}
-    setText("Loading...")
+    setText(null)
     if (follow) stop = cluster.followLogs(kind, name, namespace, (next) => {
       if (!stale) setText(next)
     })

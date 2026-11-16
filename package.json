@@ -30,6 +30,7 @@
     "@solid-primitives/keyed": "1.5.3",
     "@solid-primitives/map": "0.7.4",
     "@solid-primitives/timer": "1.4.4",
+    "arg": "5.0.2",
     "solid-js": "1.9.19"
   },
   "devDependencies": {

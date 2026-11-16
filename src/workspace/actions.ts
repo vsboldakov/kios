@@ -138,8 +138,9 @@ export function editCommand(kindId: string, actionId: string, target: EditTarget
   return null
 }
 
-export function commandLine(command: KindCommand): string {
-  const line = [shellWord(kubectlBin()), ...command.args.map(shellWord)].join(" ")
+export function commandLine(command: KindCommand, context = ""): string {
+  const scope = context ? ["--context", context] : []
+  const line = [shellWord(kubectlBin()), ...scope.map(shellWord), ...command.args.map(shellWord)].join(" ")
   if (command.stdin === undefined) return line
   return `${line} <<'EOF'\n${command.stdin}\nEOF`
 }

@@ -32,6 +32,7 @@ export type WatchEvent =
   | { type: "end"; error?: string }
 
 export interface ClusterClient {
+  context?: string
   currentContext(): Promise<string>
   namespaces(): Promise<string[]>
   contextNamespace?(): Promise<string>
@@ -46,6 +47,7 @@ export interface ClusterClient {
 
 export interface Cluster {
   contextName: () => string
+  launchContext: () => string
   namespaces: () => readonly string[]
   namespace: () => string
   namespaceLocked: () => boolean
@@ -74,17 +76,19 @@ const loadingSnapshot: ResourceSnapshot = { status: "loading", items: [], error:
 const retryMs = 2000
 const cachedAfterMs = 1500
 
-export function createCluster(client: ClusterClient): Cluster {
+export function createCluster(client: ClusterClient, initialNamespace = ""): Cluster {
   const snapshots = new ReactiveMap<string, ResourceSnapshot>()
   const attempts = new Map<string, number>()
   const cachedTimers = new Map<string, ReturnType<typeof setTimeout>>()
   let namespacesPending = false
   let lockedNamespace = ""
   let locking: Promise<void> | undefined
+  const launchContext = client.context?.trim() ?? ""
+  const openedNamespace = initialNamespace.trim()
   const [namespaceLocked, setNamespaceLocked] = createSignal(false)
-  const [contextName, setContextName] = createSignal("…")
+  const [contextName, setContextName] = createSignal(launchContext || "…")
   const [namespaces, setNamespaces] = createSignal<string[]>([])
-  const [namespace, setNamespace] = createSignal("")
+  const [namespace, setNamespace] = createSignal(openedNamespace)
   const [extraKinds, setExtraKinds] = createSignal<readonly ResourceKind[]>([])
   // Context, namespaces, and discovery wait so the first list is the only kubectl until the rows are up.
   let listed = false
@@ -93,7 +97,7 @@ export function createCluster(client: ClusterClient): Cluster {
   function startDeferred() {
     if (listed) return
     listed = true
-    void client.currentContext().then(setContextName).catch(() => setContextName("unavailable"))
+    if (!launchContext) void client.currentContext().then(setContextName).catch(() => setContextName("unavailable"))
     if (client.resources) {
       void client.resources().then(setExtraKinds).catch(() => {
         // Sidebar kinds still open when discovery cannot read the API.
@@ -122,9 +126,12 @@ export function createCluster(client: ClusterClient): Cluster {
 
   function lockNamespace(): Promise<void> {
     if (locking) return locking
-    // The context namespace is the only scope a forbidden namespace list can still name.
+    // Without a launch namespace, the context namespace is the only scope a forbidden list can still name.
     locking = Promise.resolve()
-      .then(() => client.contextNamespace?.() ?? "default")
+      .then(() => {
+        if (openedNamespace) return openedNamespace
+        return client.contextNamespace?.() ?? "default"
+      })
       .catch(() => "default")
       .then((name) => {
         const ns = (name ?? "").trim() || "default"
@@ -204,6 +211,7 @@ export function createCluster(client: ClusterClient): Cluster {
 
   return {
     contextName,
+    launchContext: () => launchContext,
     namespaces,
     namespace,
     namespaceLocked,

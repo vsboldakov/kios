@@ -143,7 +143,7 @@ export function createEditMode({
   const ask = (command: KindCommand | null, kind: string, action: { id: string; label: string }) => {
     if (!command) return
     setNotice("")
-    setPending({ title: action.label, line: commandLine(command), command, kind, actionId: action.id })
+    setPending({ title: action.label, line: commandLine(command, cluster.launchContext()), command, kind, actionId: action.id })
   }
 
   const accept = () => {

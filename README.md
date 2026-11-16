@@ -16,6 +16,15 @@ bun add --global @vsboldakov/kios@latest
 brew tap vsboldakov/kios https://github.com/vsboldakov/kios && brew install kios
 ```
 
+### Usage
+
+```bash
+kios
+kios --context prod -n payments
+```
+
+`--context` chooses a kubeconfig context. `-n` or `--namespace` opens that namespace.
+
 ### About
 
 Free, open-source TUI for managing Kubernetes. It wraps kubectl in a clear, navigable interface, so you get a far better view of your cluster than plain kubectl output, without the learning curve of k9s. It runs right in your terminal (no browser or desktop app), and the only requirement is kubectl binary.

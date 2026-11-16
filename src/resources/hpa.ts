@@ -5,8 +5,15 @@ import type { Cell, KubernetesObject } from "./types"
 export function hpaTargets(object: KubernetesObject): string {
   const specs = records(object.spec?.metrics)
   if (specs.length === 0) return legacyCpu(object)
-  const statuses = records(object.status?.currentMetrics)
-  const shown = specs.slice(0, 2).map((spec, index) => oneMetric(spec, statuses[index]))
+  const current = new Map(records(object.status?.currentMetrics).flatMap((status) => {
+    const key = metricKey(status)
+    if (!key) return []
+    return [[key, status] as const]
+  }))
+  const shown = specs.slice(0, 2).map((spec) => {
+    const key = metricKey(spec)
+    return oneMetric(spec, key ? current.get(key) : undefined)
+  })
   const extra = specs.length - shown.length
   if (extra === 0) return shown.join(", ")
   return `${shown.join(", ")} + ${extra} more...`
@@ -40,11 +47,34 @@ function oneMetric(spec: Record<string, unknown>, status: Record<string, unknown
 
 function namedResource(spec: unknown, status: unknown): string {
   const name = show(read(spec, "name"))
+  const container = show(read(spec, "container"))
+  const label = name && container ? `${name}(${container})` : name || container
   const average = read(spec, "target", "averageValue")
   const text = average !== undefined
     ? pair(read(status, "current", "averageValue"), average)
     : `${percent(read(status, "current", "averageUtilization"))}/${utilization(read(spec, "target", "averageUtilization"))}`
-  return name ? `${name}: ${text}` : text
+  return label ? `${label}: ${text}` : text
+}
+
+// status.currentMetrics is not aligned with spec.metrics, so pair them by identity
+function metricKey(metric: Record<string, unknown>): string | undefined {
+  if (metric.type === "Resource") return join(metric.type, read(metric.resource, "name"))
+  if (metric.type === "ContainerResource") return join(metric.type, read(metric.containerResource, "name"), read(metric.containerResource, "container"))
+  if (metric.type === "Pods") return join(metric.type, ...metricIdentity(metric.pods))
+  if (metric.type === "External") return join(metric.type, ...metricIdentity(metric.external))
+  if (metric.type === "Object") {
+    const target = read(metric.object, "describedObject")
+    return join(metric.type, read(target, "apiVersion"), read(target, "kind"), read(target, "name"), ...metricIdentity(metric.object))
+  }
+  return undefined
+}
+
+function metricIdentity(source: unknown): [unknown, string] {
+  return [read(source, "metric", "name"), JSON.stringify(read(source, "metric", "selector") ?? null)]
+}
+
+function join(...parts: unknown[]): string {
+  return parts.map((part) => show(part)).join("\0")
 }
 
 function valued(spec: unknown, status: unknown): string {

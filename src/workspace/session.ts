@@ -53,6 +53,8 @@ export interface Session {
   namespaceIndex: () => number
   setNamespaceIndex: (index: number) => void
   moveNamespace: (delta: number, count: number) => void
+  namespaceFilter: () => string
+  setNamespaceFilter: (query: string) => void
   openIds: () => readonly string[]
   tabs: () => readonly WorkspaceTab[]
   activeTab: () => WorkspaceTab | null
@@ -112,6 +114,7 @@ export function createSession(initial: readonly { id: string }[]): Session {
   const [focus, setFocus] = createSignal<FocusZone>(first ? "list" : "sidebar")
   const [sidebarIndex, setSidebarIndex] = createSignal(0)
   const [namespaceIndex, setNamespaceIndex] = createSignal(0)
+  const [namespaceFilter, setNamespaceFilter] = createSignal("")
   const [tabs, setTabs] = createSignal<WorkspaceTab[]>(first ? [blankTab(first)] : [])
   const [activeTabId, setActiveTabId] = createSignal<string | null>(first ? "1" : null)
   const [listToken, setListToken] = createSignal(tokenFor(tabs()[0] ?? null))
@@ -478,6 +481,8 @@ export function createSession(initial: readonly { id: string }[]): Session {
     namespaceIndex,
     setNamespaceIndex,
     moveNamespace,
+    namespaceFilter,
+    setNamespaceFilter,
     openIds: () => tabs().map((tab) => tab.kindId),
     tabs,
     activeTab: () => currentTab() ?? null,

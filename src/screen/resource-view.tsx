@@ -2,6 +2,7 @@ import type { ScrollBoxRenderable } from "@opentui/core"
 import { For, createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 import type { ObjectView } from "../cluster/cluster"
 import { useCluster, useSession } from "../context"
+import { bindDetailContent } from "./detail-content"
 import { highlight } from "./highlight"
 import { findKind } from "../resources"
 import type { DetailTab } from "../workspace/session"
@@ -20,6 +21,13 @@ export function ResourceView(props: { kindId: string; name: string; namespace: s
   const [view, setView] = createSignal<ObjectView | null>(null)
   const [error, setError] = createSignal("")
   const lines = createMemo(() => (view()?.[props.tab] ?? (error() || "Loading...")).split("\n"))
+  const releaseDetail = bindDetailContent(() => {
+    const loaded = view()
+    if (loaded) return loaded[props.tab]
+    if (error()) return error()
+    return null
+  })
+  onCleanup(releaseDetail)
 
   createEffect(() => {
     const kind = findKind(props.kindId, cluster.extraKinds())

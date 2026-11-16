@@ -3,9 +3,18 @@ import { mergeUsage } from "../resources/quantity"
 import type { KindCommand, KubernetesObject, ResourceKind } from "../resources"
 import { ClientError, type ClusterClient, type ObjectView, type WatchEvent } from "./cluster"
 
-export function createKubectlClient(): ClusterClient {
+// One process uses one kubeconfig context. Every kubectl spawn reads this.
+let kubeContext = ""
+
+export function createKubectlClient(context = ""): ClusterClient {
+  const selected = context.trim()
+  kubeContext = selected
   return {
-    currentContext: async () => (await kubectl(["config", "current-context"])).trim() || "unknown",
+    context: selected || undefined,
+    currentContext: async () => {
+      if (selected) return selected
+      return (await kubectl(["config", "current-context"])).trim() || "unknown"
+    },
     namespaces: async () =>
       parseList(await kubectl(["get", "ns", "-o", "json"]))
         .map((item) => item.metadata?.name ?? "")
@@ -73,7 +82,7 @@ function followLogs(kind: ResourceKind, name: string, namespace: string, onText:
   const bin = kubectlBin()
   let proc: ReturnType<typeof Bun.spawn>
   try {
-    proc = Bun.spawn([bin, ...logArgs(kind, name, namespace, true)], { stdout: "pipe", stderr: "pipe" } as const)
+    proc = Bun.spawn([bin, ...scoped(logArgs(kind, name, namespace, true))], { stdout: "pipe", stderr: "pipe" } as const)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     onText(message.includes("ENOENT") ? `${bin} was not found` : message)
@@ -144,17 +153,27 @@ export function kubectlBin(): string {
   return bin || "kubectl"
 }
 
+export function withContext(context: string, args: string[]): string[] {
+  if (!context) return args
+  return ["--context", context, ...args]
+}
+
+function scoped(args: string[]): string[] {
+  return withContext(kubeContext, args)
+}
+
 function kubectl(args: string[]): Promise<string> {
-  return run(kubectlBin(), args)
+  return run(kubectlBin(), scoped(args))
 }
 
 async function execute(command: KindCommand): Promise<void> {
   const bin = kubectlBin()
+  const args = scoped(command.args)
   if (command.interactive) {
-    await interact(bin, command.args)
+    await interact(bin, args)
     return
   }
-  await run(bin, command.args, command.stdin)
+  await run(bin, args, command.stdin)
 }
 
 async function interact(bin: string, args: string[]): Promise<void> {
@@ -224,7 +243,7 @@ function watchResource(kind: ResourceKind, onEvents: (events: WatchEvent[]) => v
       const raw = `${path}?watch=1&resourceVersion=${encodeURIComponent(listed.resourceVersion)}`
       const bin = kubectlBin()
       try {
-        proc = Bun.spawn([bin, "get", "--raw", raw], { stdout: "pipe", stderr: "pipe" })
+        proc = Bun.spawn([bin, ...scoped(["get", "--raw", raw])], { stdout: "pipe", stderr: "pipe" })
       } catch (error) {
         if (stopped) return
         const message = error instanceof Error ? error.message : String(error)
