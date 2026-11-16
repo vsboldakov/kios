@@ -67,11 +67,15 @@ function containerState(status: ContainerStatus | undefined): { text: string; to
   const terminated = status?.state?.terminated
   if (terminated) {
     const done = terminated.exitCode === 0 || terminated.reason === "Completed"
-    return { text: terminated.reason || (done ? "Completed" : "Error"), tone: done ? "muted" : "progress" }
+    return containerLabel(terminated.reason || (done ? "Completed" : "Error"), done ? "muted" : "progress")
   }
-  if (status?.state?.waiting) return { text: status.state.waiting.reason || "Waiting", tone: "progress" }
-  if (status?.state?.running || status?.ready) return { text: "Running", tone: status?.ready ? "ready" : "progress" }
-  return { text: "Pending", tone: "muted" }
+  if (status?.state?.waiting) return containerLabel(status.state.waiting.reason || "Waiting", "progress")
+  if (status?.state?.running || status?.ready) return containerLabel("Running", status?.ready ? "ready" : "progress")
+  return containerLabel("Pending", "muted")
+}
+
+function containerLabel(text: string, tone: NonNullable<Cell["tone"]>) {
+  return { text, tone }
 }
 
 // shortcut: request/limit from the pod spec; switch to metrics-server when live usage is required

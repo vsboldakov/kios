@@ -31,13 +31,13 @@ export function ResourceList(props: { kind: ResourceKind; letters: boolean }) {
   })
   const banner = createMemo(() => {
     const current = snapshot()
-    const query = session.filter()
     if (current.status === "error" && current.items.length === 0) return current.error ?? "Failed to load resources"
     if (current.items.length === 0 && current.status === "loading") return `Loading ${props.kind.label}...`
-    if (query && owned().length > 0 && items().length === 0) return `No ${props.kind.label} matching ${query}`
+    const query = session.filter()
+    if (query && owned().length > 0 && items().length === 0) return noItems(props.kind.label, `matching ${query}`)
     const owner = session.activeTab()?.owner
-    if (items().length === 0 && owner) return `No ${props.kind.label} owned by ${owner.name}`
-    if (current.items.length === 0) return `No ${props.kind.label}`
+    if (items().length === 0 && owner) return noItems(props.kind.label, `owned by ${owner.name}`)
+    if (current.items.length === 0) return noItems(props.kind.label)
     return ""
   })
   const letters = createMemo(() => columnLetters(props.kind.columns.map((column) => column.header)))
@@ -97,6 +97,10 @@ export function ResourceList(props: { kind: ResourceKind; letters: boolean }) {
       </scrollbox>
     </box>
   )
+}
+
+function noItems(label: string, detail?: string) {
+  return detail ? `No ${label} ${detail}` : `No ${label}`
 }
 
 function ResourceRow(props: {

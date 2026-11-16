@@ -104,19 +104,15 @@ export function Shell() {
     if (!visible) return ""
     if (visible.type === "containers") {
       const count = visible.shown.length
-      const total = visible.rows.length
-      return visible.query ? `${count}/${total} containers in ${visible.scope.name}` : `${count} containers in ${visible.scope.name}`
+      return `${visible.query ? `${count}/${visible.rows.length}` : count} containers in ${visible.scope.name}`
     }
     const kind = activeKind()
     if (!kind) return ""
     const current = cluster.snapshot(kind.id)
-    if (current.status === "loading" && current.items.length === 0) return "loading"
-    if (current.status === "error" && current.items.length === 0) return "error"
+    if (current.items.length === 0 && current.status !== "ready") return current.status
     const owner = session.activeTab()?.owner
-    const count = visible.shown.length
-    const total = visible.rows.length
-    if (visible.query) return owner ? `${count}/${total} owned by ${owner.name}` : `${count}/${total}`
-    return owner ? `${count} owned by ${owner.name}` : String(count)
+    const shown = visible.query ? `${visible.shown.length}/${visible.rows.length}` : String(visible.shown.length)
+    return owner ? `${shown} owned by ${owner.name}` : shown
   })
   const target = createMemo(() => currentTarget(session, cluster))
   let slashKey = (_key: KeyEvent): boolean => false

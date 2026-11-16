@@ -143,10 +143,14 @@ function nodeRoles(object: KubernetesObject): string {
 }
 
 function jobStatus(object: KubernetesObject): Cell {
-  if (count(object.status?.failed) > 0) return { text: "Failed", tone: "progress" }
+  if (count(object.status?.failed) > 0) return jobLabel("Failed", "progress")
   const completions = count(object.spec?.completions)
-  if (completions > 0 && count(object.status?.succeeded) >= completions) return { text: "Complete", tone: "ready" }
-  return { text: "Running", tone: "progress" }
+  if (completions > 0 && count(object.status?.succeeded) >= completions) return jobLabel("Complete", "ready")
+  return jobLabel("Running", "progress")
+}
+
+function jobLabel(text: string, tone: NonNullable<Cell["tone"]>) {
+  return { text, tone }
 }
 
 const eventAge: Column = {

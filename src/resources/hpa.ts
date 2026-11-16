@@ -26,8 +26,7 @@ export function hpaReplicas(object: KubernetesObject): Cell {
   const text = `${typeof current === "number" ? current : 0}/${typeof desired === "number" ? desired : 0}`
   if (typeof current !== "number" || typeof desired !== "number") return { text }
   const max = object.spec?.maxReplicas
-  const capped = typeof max === "number" && current >= max
-  return { text, tone: current === desired && !capped ? "ready" : "progress" }
+  return { text, tone: current === desired && !(typeof max === "number" && current >= max) ? "ready" : "progress" }
 }
 
 function legacyCpu(object: KubernetesObject): string {
