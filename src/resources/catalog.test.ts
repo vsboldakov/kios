@@ -166,13 +166,13 @@ test("groups the extra kinds and reads pod readiness", () => {
       ],
     },
   }, 0)).toEqual({
-    text: "○ ● ● ○",
+    text: "● ● ○ ○",
     parts: [
-      { text: "○", tone: "muted" },
-      { text: " " },
       { text: "●", tone: "ready" },
       { text: " " },
       { text: "●", tone: "progress" },
+      { text: " " },
+      { text: "○", tone: "muted" },
       { text: " " },
       { text: "○", tone: "muted" },
     ],
@@ -183,7 +183,7 @@ test("groups the extra kinds and reads pod readiness", () => {
   ])
 })
 
-test("keeps a running container visible after completed init containers", () => {
+test("shows running containers before completed init containers", () => {
   const names = ["config", "mount-cgroup", "apply-sysctl-overwrites", "mount-bpf-fs", "clean-cilium-state", "install-cni-binaries"]
   const object: KubernetesObject = {
     spec: {
@@ -200,7 +200,7 @@ test("keeps a running container visible after completed init containers", () => 
     },
   }
   const column = findKind("pods")?.columns.find((item) => item.id === "containers")
-  const text = "○ ○ ○ ○ ○ ○ ●"
+  const text = "● ○ ○ ○ ○ ○ ○"
   expect(column?.cell(object, 0)).toEqual({
     text,
     parts: [...text].map((char) => (char === " " ? { text: " " } : { text: char, tone: char === "●" ? "ready" as const : "muted" as const })),
@@ -228,11 +228,11 @@ test("lists containers for a pod without adding a sidebar kind", () => {
       ephemeralContainerStatuses: [{ name: "debug", state: { terminated: { exitCode: 1 } } }],
     },
   })
-  expect(rows.map((row) => row.type)).toEqual(["init", "sidecar", "container", "ephemeral"])
-  expect(rows.map((row) => row.name)).toEqual(["init", "mesh", "app", "debug"])
-  expect(rows[0]).toMatchObject({ status: "Completed", tone: "muted", restarts: 1, cpu: "-", memory: "-", image: "busybox" })
-  expect(rows[1]).toMatchObject({ status: "Running", tone: "ready", restarts: 2, cpu: "10m/-", memory: "-/32Mi" })
-  expect(rows[2]).toMatchObject({ status: "CrashLoopBackOff", tone: "progress", restarts: 4, cpu: "100m/200m", memory: "64Mi/128Mi", image: "nginx:1.27" })
+  expect(rows.map((row) => row.type)).toEqual(["container", "init", "sidecar", "ephemeral"])
+  expect(rows.map((row) => row.name)).toEqual(["app", "init", "mesh", "debug"])
+  expect(rows[0]).toMatchObject({ status: "CrashLoopBackOff", tone: "progress", restarts: 4, cpu: "100m/200m", memory: "64Mi/128Mi", image: "nginx:1.27" })
+  expect(rows[1]).toMatchObject({ status: "Completed", tone: "muted", restarts: 1, cpu: "-", memory: "-", image: "busybox" })
+  expect(rows[2]).toMatchObject({ status: "Running", tone: "ready", restarts: 2, cpu: "10m/-", memory: "-/32Mi" })
   expect(rows[3]).toMatchObject({ status: "Error", tone: "progress", restarts: 0, image: "busybox:debug" })
   expect(podContainers({})).toEqual([])
 })

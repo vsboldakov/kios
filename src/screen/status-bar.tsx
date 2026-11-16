@@ -3,6 +3,7 @@ import { useCluster, useSession } from "../context"
 import { findKind, podContainers, sidebarLabel } from "../resources"
 import { nameMatches } from "../workspace/filter"
 import { listedItems, scopedPod } from "../workspace/selection"
+import { namespaceOptions } from "./namespace-list"
 import { theme } from "./theme"
 
 export function StatusBar(props: { filtering: boolean }) {
@@ -14,7 +15,11 @@ export function StatusBar(props: { filtering: boolean }) {
     if (tab?.resource && session.focus() === "detail") {
       return tab.resource.namespace ? `${tab.resource.namespace}/${tab.resource.name}` : tab.resource.name
     }
-    if (session.focus() === "namespaces") return cluster.namespace() || "all namespaces"
+    if (session.focus() === "namespaces") {
+      const names = namespaceOptions(cluster.namespaceLocked(), cluster.namespaces())
+      const name = names[Math.min(session.namespaceIndex(), Math.max(names.length - 1, 0))] ?? ""
+      return name || "all namespaces"
+    }
     if (session.focus() === "sidebar") return sidebarLabel(findKind(session.menu()[session.sidebarIndex()]?.id ?? "", cluster.extraKinds())?.label ?? "")
     const scope = session.activeId() === "pods" ? session.containerScope() : null
     if (scope && session.focus() === "list") {
@@ -54,7 +59,7 @@ export function StatusBar(props: { filtering: boolean }) {
       return `d describe   ← parent   → child   f ${session.detail()?.follow ? "following" : "follow"}   [ ] tabs${closeHint()}   esc back`
     }
     if (focus === "detail") return `d describe   ← → view   esc back${logsHint()}   [ ] tabs${closeHint()}`
-    if (focus === "namespaces") return `[ ] tabs${closeHint()}`
+    if (focus === "namespaces") return `enter select   [ ] tabs${closeHint()}`
     if (focus === "sidebar") return `enter open   t new   [ ] tabs${closeHint()}`
     return `← parent   → child   d describe   t new   [ ] tabs${closeHint()}   e edit${logsHint()}   / menu   shift sort`
   }

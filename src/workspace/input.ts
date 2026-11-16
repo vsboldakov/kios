@@ -19,6 +19,7 @@ export interface WorkspaceActions {
   closeTab: () => void
   toggleNamespaces: () => void
   moveNamespace: (delta: number) => void
+  openNamespace: () => void
   closeNamespaces: () => void
   openDetail: () => void
   closeDetail: () => void
@@ -102,7 +103,8 @@ export function runKey(key: KeyCommand, actions: WorkspaceActions): void {
   if (actions.focus() === "namespaces") {
     if (down.has(key.name)) actions.moveNamespace(1)
     if (up.has(key.name)) actions.moveNamespace(-1)
-    if (open.has(key.name) || key.name === "escape") actions.closeNamespaces()
+    if (open.has(key.name)) actions.openNamespace()
+    if (key.name === "escape") actions.closeNamespaces()
     return
   }
 

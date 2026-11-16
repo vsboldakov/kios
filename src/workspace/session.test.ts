@@ -234,6 +234,7 @@ test("routes keys to the focused zone", () => {
       closeTab: () => session.closeTab(),
       toggleNamespaces: () => {},
       moveNamespace: () => {},
+      openNamespace: () => {},
       closeNamespaces: () => {},
       openDetail: () => {
         details += 1

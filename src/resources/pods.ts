@@ -27,8 +27,8 @@ export const podColumns: Column[] = [
 
 export function podContainers(object: KubernetesObject): PodContainer[] {
   return [
-    ...containerRows(object.spec?.initContainers, object.status?.initContainerStatuses, "init"),
     ...containerRows(object.spec?.containers, object.status?.containerStatuses, "container"),
+    ...containerRows(object.spec?.initContainers, object.status?.initContainerStatuses, "init"),
     ...containerRows(object.spec?.ephemeralContainers, object.status?.ephemeralContainerStatuses, "ephemeral"),
   ]
 }
@@ -50,8 +50,8 @@ function containerTone(status: ContainerStatus | undefined): NonNullable<Cell["t
 
 function containerMarks(object: KubernetesObject): Cell {
   const items = [
-    ...listedContainers(object.spec?.initContainers, object.status?.initContainerStatuses),
     ...listedContainers(object.spec?.containers, object.status?.containerStatuses),
+    ...listedContainers(object.spec?.initContainers, object.status?.initContainerStatuses),
   ]
   if (items.length === 0) return { text: "" }
   const parts: CellPart[] = []

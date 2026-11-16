@@ -50,6 +50,9 @@ export interface WorkspaceTab {
 export interface Session {
   focus: () => FocusZone
   sidebarIndex: () => number
+  namespaceIndex: () => number
+  setNamespaceIndex: (index: number) => void
+  moveNamespace: (delta: number, count: number) => void
   openIds: () => readonly string[]
   tabs: () => readonly WorkspaceTab[]
   activeTab: () => WorkspaceTab | null
@@ -108,6 +111,7 @@ export function createSession(initial: readonly { id: string }[]): Session {
   let sequence = 0
   const [focus, setFocus] = createSignal<FocusZone>(first ? "list" : "sidebar")
   const [sidebarIndex, setSidebarIndex] = createSignal(0)
+  const [namespaceIndex, setNamespaceIndex] = createSignal(0)
   const [tabs, setTabs] = createSignal<WorkspaceTab[]>(first ? [blankTab(first)] : [])
   const [activeTabId, setActiveTabId] = createSignal<string | null>(first ? "1" : null)
   const [listToken, setListToken] = createSignal(tokenFor(tabs()[0] ?? null))
@@ -255,6 +259,11 @@ export function createSession(initial: readonly { id: string }[]): Session {
     const count = menu().length
     if (count === 0) return
     setSidebarIndex((index) => clamp(index + delta, 0, count - 1))
+  }
+
+  function moveNamespace(delta: number, count: number) {
+    if (count <= 0) return
+    setNamespaceIndex((index) => clamp(index + delta, 0, count - 1))
   }
 
   function listRow(tab: WorkspaceTab): string {
@@ -466,6 +475,9 @@ export function createSession(initial: readonly { id: string }[]): Session {
   return {
     focus,
     sidebarIndex,
+    namespaceIndex,
+    setNamespaceIndex,
+    moveNamespace,
     openIds: () => tabs().map((tab) => tab.kindId),
     tabs,
     activeTab: () => currentTab() ?? null,

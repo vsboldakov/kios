@@ -5,7 +5,7 @@ import { ActionBar } from "./screen/action-bar"
 import { ConfirmDialog } from "./screen/confirm-dialog"
 import { scrollDetail } from "./screen/detail-scroll"
 import { LogView } from "./screen/log-view"
-import { NamespaceList } from "./screen/namespace-list"
+import { NamespaceList, namespaceOptions } from "./screen/namespace-list"
 import { ContainerList, containerColumns, orderedContainers } from "./screen/container-list"
 import { ResourceList } from "./screen/resource-list"
 import { ResourceView } from "./screen/resource-view"
@@ -249,13 +249,24 @@ export function Shell() {
         const main = session.detail() ? "detail" : "list"
         session.setFocus(session.focus() === main ? "sidebar" : main)
       },
-      toggleNamespaces: () => session.setFocus(session.focus() === "namespaces" ? "list" : "namespaces"),
+      toggleNamespaces: () => {
+        if (session.focus() === "namespaces") {
+          session.setFocus("list")
+          return
+        }
+        const names = namespaceOptions(cluster.namespaceLocked(), cluster.namespaces())
+        session.setNamespaceIndex(Math.max(0, names.indexOf(cluster.namespace())))
+        session.setFocus("namespaces")
+      },
       closeNamespaces: () => session.setFocus("list"),
       moveNamespace: (delta) => {
-        const names = cluster.namespaceLocked() ? [...cluster.namespaces()] : ["", ...cluster.namespaces()]
-        const index = Math.max(0, names.indexOf(cluster.namespace()))
-        const next = Math.min(Math.max(index + delta, 0), names.length - 1)
-        cluster.setNamespace(names[next] ?? "")
+        session.moveNamespace(delta, namespaceOptions(cluster.namespaceLocked(), cluster.namespaces()).length)
+      },
+      openNamespace: () => {
+        const names = namespaceOptions(cluster.namespaceLocked(), cluster.namespaces())
+        const index = Math.min(session.namespaceIndex(), Math.max(names.length - 1, 0))
+        cluster.setNamespace(names[index] ?? "")
+        session.setFocus("list")
       },
       moveSidebar: session.moveSidebar,
       openSidebar: session.openSidebar,

@@ -5,14 +5,24 @@ import { Keyed } from "./keyed"
 import { fit } from "../resources"
 import { sidebarWidth, splitBorder, theme } from "./theme"
 
+export function namespaceOptions(locked: boolean, names: readonly string[]): readonly string[] {
+  return locked ? names : ["", ...names]
+}
+
 export function NamespaceList() {
   const session = useSession()
   const cluster = useCluster()
-  const options = createMemo(() => (cluster.namespaceLocked() ? [...cluster.namespaces()] : ["", ...cluster.namespaces()]))
+  const options = createMemo(() => namespaceOptions(cluster.namespaceLocked(), cluster.namespaces()))
+  const cursor = createMemo(() => {
+    const count = options().length
+    if (count === 0) return 0
+    return Math.min(session.namespaceIndex(), count - 1)
+  })
   let scroller: ScrollBoxRenderable | undefined
 
   createEffect(() => {
-    const id = rowId(cluster.namespace())
+    const name = session.focus() === "namespaces" ? options()[cursor()] ?? "" : cluster.namespace()
+    const id = rowId(name)
     scroller?.afterLayout(() => scroller?.scrollChildIntoView(id))
   })
 
@@ -44,34 +54,35 @@ export function NamespaceList() {
         verticalScrollbarOptions={{ paddingLeft: 1 }}
       >
         <Keyed each={options()} by={(name) => name || "all"}>
-          {(name) => <NamespaceRow name={name()} />}
+          {(name, index) => <NamespaceRow name={name()} index={index()} cursor={cursor()} />}
         </Keyed>
       </scrollbox>
     </box>
   )
 }
 
-function NamespaceRow(props: { name: string }) {
+function NamespaceRow(props: { name: string; index: number; cursor: number }) {
   const session = useSession()
   const cluster = useCluster()
+  const cursor = () => session.focus() === "namespaces" && props.cursor === props.index
   const selected = () => cluster.namespace() === props.name
-  const focused = () => session.focus() === "namespaces"
 
   return (
     <box
       id={rowId(props.name)}
       height={1}
       width="100%"
-      backgroundColor={selected() && focused() ? theme.primary : theme.panel}
+      backgroundColor={cursor() ? theme.primary : theme.panel}
       paddingLeft={1}
       onMouseDown={(event) => {
         event.stopPropagation()
+        session.setNamespaceIndex(props.index)
         cluster.setNamespace(props.name)
         session.setFocus("list")
       }}
     >
       {/* shortcut: names longer than the column are cut, widen sidebarWidth when a namespace needs its full name */}
-      <text fg={selected() && focused() ? theme.selected : selected() ? theme.primary : theme.fg}>
+      <text fg={cursor() ? theme.selected : selected() ? theme.primary : theme.fg}>
         {fit(props.name || "all namespaces", sidebarWidth - 3)}
       </text>
     </box>
