@@ -13,7 +13,8 @@ test("labels a list as live, cached, stale, or aged", () => {
   expect(listFreshness(snapshot({ status: "loading", items: [] }), now)).toBeNull()
   expect(listFreshness(snapshot({ status: "error", items: [], error: "gone" }), now)).toBeNull()
   expect(listFreshness(snapshot({ live: true }), now)).toEqual({ text: "  live", fg: theme.dot })
-  expect(listFreshness(snapshot({ live: true, updatedAt: now - 31_000 }), now)).toEqual({ text: "  31s", fg: theme.progress })
+  expect(listFreshness(snapshot({ live: true, updatedAt: now - 31_000 }), now)).toEqual({ text: "  live", fg: theme.dot })
+  expect(listFreshness(snapshot({ live: true, updatedAt: now - 240_000 }), now)).toEqual({ text: "  live", fg: theme.dot })
   expect(listFreshness(snapshot({ cached: true, updatedAt: now - 240_000 }), now)).toEqual({ text: "  cached 4m", fg: theme.progress })
   expect(listFreshness(snapshot({ status: "error", error: "gone", cached: true, updatedAt: now - 240_000 }), now)).toEqual({
     text: "  cached 4m",

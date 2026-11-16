@@ -473,16 +473,18 @@ function EditToggle(props: { on: boolean; onToggle: () => void }) {
 }
 
 export function listFreshness(snapshot: ResourceSnapshot, now: number): { text: string; fg: string } | null {
-  if (snapshot.status === "loading" && snapshot.items.length === 0) return null
-  if (snapshot.status === "error" && snapshot.items.length === 0) return null
+  if (snapshot.items.length === 0 && snapshot.status !== "ready") return null
   const updatedAt = snapshot.updatedAt
-  const fresh = updatedAt != null && now - updatedAt <= 30_000
   const age = updatedAt == null ? "" : formatAge(new Date(updatedAt).toISOString(), now)
-  if (snapshot.cached && age) return { text: `  cached ${age}`, fg: theme.progress }
-  if (snapshot.status === "error") return { text: "  stale", fg: theme.error }
-  if (snapshot.live && fresh) return { text: "  live", fg: theme.dot }
-  if (!age || updatedAt == null) return null
-  return { text: `  ${age}`, fg: fresh ? theme.muted : theme.progress }
+  if (snapshot.cached && age) return freshness(`cached ${age}`, theme.progress)
+  if (snapshot.status === "error") return freshness("stale", theme.error)
+  if (snapshot.live) return freshness("live", theme.dot)
+  if (updatedAt == null) return null
+  return freshness(age, now - updatedAt <= 30_000 ? theme.muted : theme.progress)
+}
+
+function freshness(text: string, fg: string) {
+  return { text: `  ${text}`, fg }
 }
 
 function EmptyMain() {
