@@ -3,6 +3,10 @@ export const kindSidebarWidth = 24 // text budget is width - 3; AuthorizationPol
 // Empty columns on the right of a resource table. Scrollbar position "absolute" draws over them.
 export const listGutter = 2
 
+export function listWidth(terminalWidth: number): number {
+  return Math.max(20, terminalWidth - kindSidebarWidth - sidebarWidth - 4 - listGutter)
+}
+
 export const theme = {
   bg: "#0a0a0a",
   panel: "#141414",

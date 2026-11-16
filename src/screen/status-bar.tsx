@@ -1,8 +1,7 @@
 import { createMemo } from "solid-js"
 import { useCluster, useSession } from "../context"
-import { findKind, podContainers, sidebarLabel } from "../resources"
-import { nameMatches } from "../workspace/filter"
-import { listedItems, scopedPod } from "../workspace/selection"
+import { findKind, sidebarLabel } from "../resources"
+import { listedItems, rowAt, visibleRows } from "../workspace/selection"
 import { filteredNamespaces, namespaceLabel } from "./namespace-list"
 import { theme } from "./theme"
 
@@ -21,20 +20,17 @@ export function StatusBar(props: { filtering: boolean }) {
       return namespaceLabel(names[Math.min(session.namespaceIndex(), names.length - 1)] ?? "")
     }
     if (session.focus() === "sidebar") return sidebarLabel(findKind(session.menu()[session.sidebarIndex()]?.id ?? "", cluster.extraKinds())?.label ?? "")
-    const scope = session.activeId() === "pods" ? session.containerScope() : null
-    if (scope && session.focus() === "list") {
-      const pod = scopedPod(session, cluster)
-      const rows = (pod ? podContainers(pod) : []).filter((row) => nameMatches(row.name, session.containerFilter()))
-      const row = rows[Math.min(session.containerIndex(), Math.max(rows.length - 1, 0))]
-      const prefix = scope.namespace ? `${scope.namespace}/${scope.name}` : scope.name
+    const visible = visibleRows(session, cluster)
+    if (visible?.type === "containers" && session.focus() === "list") {
+      const row = rowAt(visible.shown, session.containerIndex())
+      const prefix = visible.scope.namespace ? `${visible.scope.namespace}/${visible.scope.name}` : visible.scope.name
       return row ? `${prefix}/${row.name}` : prefix
     }
     const id = session.activeId()
     if (!id) return ""
     const items = listedItems(session, cluster, id)
     if (items.length === 0) return findKind(id, cluster.extraKinds())?.label ?? ""
-    const index = Math.min(session.rowIndex(id), items.length - 1)
-    const item = items[index]
+    const item = rowAt(items, session.rowIndex(id))
     if (!item) return ""
     const namespace = item.metadata?.namespace ?? ""
     const name = item.metadata?.name ?? ""

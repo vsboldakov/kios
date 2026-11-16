@@ -49,7 +49,7 @@ export function columnWidth(column: Column, objects: readonly KubernetesObject[]
   return objects.reduce((max, object) => Math.max(max, column.cell(object, now).text.length), column.width)
 }
 
-export function resolveWidths(columns: readonly Column[], total: number): number[] {
+export function resolveWidths(columns: readonly { width: number; grow?: boolean }[], total: number): number[] {
   const gaps = 2 * Math.max(0, columns.length - 1)
   const fixed = columns.reduce((sum, column) => sum + (column.grow ? 0 : column.width), 0)
   const growers = columns.filter((column) => column.grow).length

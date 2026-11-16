@@ -1,13 +1,13 @@
 import type { ScrollBoxRenderable } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/solid"
-import { For, Show, createEffect, createMemo } from "solid-js"
+import { Show, createEffect, createMemo } from "solid-js"
 import { useCluster, useSession } from "../context"
 import { Keyed } from "./keyed"
-import { MatchedText } from "./list-filter"
-import { columnWidth, fit, fitParts, objectId, ownedItems, resolveWidths, type Cell, type Column, type KubernetesObject, type ResourceKind } from "../resources"
+import { columnWidth, objectId, ownedItems, resolveWidths, type KubernetesObject, type ResourceKind } from "../resources"
 import { listedItems } from "../workspace/selection"
 import { columnHeader, columnLetters } from "../workspace/sort"
-import { kindSidebarWidth, listGutter, sidebarWidth, theme, toneColor } from "./theme"
+import { Cells } from "./cells"
+import { listGutter, listWidth, theme } from "./theme"
 
 export function ResourceList(props: { kind: ResourceKind; letters: boolean }) {
   const session = useSession()
@@ -22,7 +22,7 @@ export function ResourceList(props: { kind: ResourceKind; letters: boolean }) {
     const columns = props.kind.columns.map((column) =>
       column.id === "containers" ? { ...column, width: columnWidth(column, owned(), 0) } : column,
     )
-    return resolveWidths(columns, Math.max(20, dimensions().width - kindSidebarWidth - sidebarWidth - 4 - listGutter))
+    return resolveWidths(columns, listWidth(dimensions().width))
   })
   const selected = createMemo(() => {
     const count = items().length
@@ -129,43 +129,6 @@ function ResourceRow(props: {
         query={session.filter()}
       />
     </box>
-  )
-}
-
-function Cells(props: { columns: readonly Column[]; widths: number[]; values: Cell[]; background: string; fg?: string; query?: string }) {
-  return (
-    <box height={1} width="100%" flexShrink={0} flexDirection="row" backgroundColor={props.background} paddingLeft={2}>
-      <For each={props.columns}>
-        {(column, index) => (
-          <text
-            fg={props.fg ?? (props.values[index()]?.parts ? undefined : toneColor(props.values[index()]?.tone))}
-            bg={props.background}
-          >
-            {column.id === "name" && props.query ? (
-              <MatchedText
-                text={props.values[index()]?.text ?? ""}
-                query={props.query}
-                width={props.widths[index()] ?? column.width}
-                covered={Boolean(props.fg)}
-              />
-            ) : (
-              renderCell(props.values[index()], props.widths[index()] ?? column.width)
-            )}
-            {index() < props.columns.length - 1 ? "  " : ""}
-          </text>
-        )}
-      </For>
-    </box>
-  )
-}
-
-function renderCell(value: Cell | undefined, width: number) {
-  const parts = value?.parts
-  if (!parts) return fit(value?.text ?? "", width)
-  return (
-    <For each={fitParts(parts, width)}>
-      {(part) => <span style={{ fg: part.tone === "ready" ? theme.dot : part.tone ? toneColor(part.tone) : undefined }}>{part.text}</span>}
-    </For>
   )
 }
 

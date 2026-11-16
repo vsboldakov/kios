@@ -1,5 +1,5 @@
 import type { KubernetesObject } from "../resources/types"
-import { boolColumn, column, listed, read, show, texts } from "../resources/columns"
+import { boolColumn, column, joinList, lengthOf, listed, qualifiedName, read, show, texts } from "../resources/columns"
 import { pack, type CustomResource } from "./install"
 
 const classic = "kyverno.io"
@@ -31,7 +31,7 @@ function policy(
   return kyvernoResource(apiGroup, versions, plural, kind, namespaced, listed(namespaced, [
     column("background", "BACKGROUND", 10, (object) => boolText(read(object.spec, "background"))),
     column("action", "ACTION", 8, (object) => show(read(object.spec, "validationFailureAction"))),
-    column("rules", "RULES", 5, (object) => count(read(object.spec, "rules"))),
+    column("rules", "RULES", 5, (object) => lengthOf(read(object.spec, "rules"))),
     boolColumn("ready", "READY", 5, (object) => read(object.status, "ready")),
   ]), aliases, true)
 }
@@ -75,18 +75,15 @@ function kyvernoResource(
 
 function exceptionPolicies(object: KubernetesObject): string {
   const refs = read(object.spec, "policyRefs")
-  if (Array.isArray(refs)) return refs.flatMap((item) => named(show(read(item, "name")))).join(",")
-  const exceptions = read(object.spec, "exceptions")
-  if (!Array.isArray(exceptions)) return ""
-  return exceptions.flatMap((item) => named(show(read(item, "policyName")))).join(",")
+  if (Array.isArray(refs)) return joinList(refs, (item) => show(read(item, "name")))
+  return joinList(read(object.spec, "exceptions"), (item) => show(read(item, "policyName")))
 }
 
 function reportScope(object: KubernetesObject): string {
   const kind = show(read(object, "scope", "kind"))
   const name = show(read(object, "scope", "name"))
   if (!name) return kind
-  if (!kind) return name
-  return `${kind}/${name}`
+  return qualifiedName(kind, name)
 }
 
 function boolText(value: unknown): string {
@@ -95,11 +92,3 @@ function boolText(value: unknown): string {
   return ""
 }
 
-function count(value: unknown): string {
-  if (!Array.isArray(value)) return ""
-  return String(value.length)
-}
-
-function named(value: string): string[] {
-  return value ? [value] : []
-}

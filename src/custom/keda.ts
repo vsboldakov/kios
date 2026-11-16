@@ -1,5 +1,5 @@
 import type { KubernetesObject } from "../resources/types"
-import { column, listed, read, readyColumn, show } from "../resources/columns"
+import { column, conditionText, joinList, listed, qualifiedName, read, readyColumn, show } from "../resources/columns"
 import { pack, type CustomResource } from "./install"
 
 const group = "keda.sh"
@@ -29,7 +29,7 @@ function scaled(plural: string, kind: string, aliases: readonly string[], extra:
       column("max", "MAX", 4, (object) => show(read(object.spec, "maxReplicaCount"))),
       column("triggers", "TRIGGERS", 16, triggers, extra.length === 0),
       readyColumn(),
-      column("active", "ACTIVE", 6, (object) => conditionStatus(object, "Active")),
+      column("active", "ACTIVE", 6, (object) => conditionText(object, "Active")),
     ]),
   }
 }
@@ -49,21 +49,13 @@ function auth(plural: string, kind: string, namespaced: boolean): CustomResource
 
 function scaleTarget(object: KubernetesObject): string {
   const kind = show(read(object.status, "scaleTargetKind")) || show(read(object.spec, "scaleTargetRef", "kind"))
-  const name = show(read(object.spec, "scaleTargetRef", "name"))
-  if (!name) return ""
-  if (!kind) return name
-  return `${kind}/${name}`
+  return qualifiedName(kind, show(read(object.spec, "scaleTargetRef", "name")))
 }
 
 function triggers(object: KubernetesObject): string {
   const listed = show(read(object.status, "triggersTypes"))
   if (listed) return listed
-  const items = read(object.spec, "triggers")
-  if (!Array.isArray(items)) return ""
-  return items.flatMap((item) => {
-    const type = show(read(item, "type"))
-    return type ? [type] : []
-  }).join(",")
+  return joinList(read(object.spec, "triggers"), (item) => show(read(item, "type")))
 }
 
 function authType(object: KubernetesObject): string {
@@ -75,6 +67,3 @@ function authType(object: KubernetesObject): string {
   return ""
 }
 
-function conditionStatus(object: KubernetesObject, type: string): string {
-  return object.status?.conditions?.find((item) => item.type === type)?.status ?? ""
-}

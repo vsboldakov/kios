@@ -1,4 +1,4 @@
-import { column, listed, read, show, statusColumn } from "../resources/columns"
+import { column, lengthOf, listed, read, show, statusColumn } from "../resources/columns"
 import { pack, type CustomResource } from "./install"
 
 const group = "argoproj.io"
@@ -12,10 +12,10 @@ export const argocd = pack(14, [
     column("project", "PROJECT", 12, (object) => show(read(object.spec, "project")), true),
   ])),
   argo("applicationsets", "ApplicationSet", true, listed(true, [
-    column("generators", "GENERATORS", 10, (object) => count(read(object.spec, "generators"))),
+    column("generators", "GENERATORS", 10, (object) => lengthOf(read(object.spec, "generators"))),
   ])),
   argo("appprojects", "AppProject", false, listed(false, [
-    column("sources", "SOURCES", 8, (object) => count(read(object.spec, "sourceRepos"))),
+    column("sources", "SOURCES", 8, (object) => lengthOf(read(object.spec, "sourceRepos"))),
   ])),
 ])
 
@@ -23,7 +23,3 @@ function argo(plural: string, kind: string, namespaced: boolean, columns: Custom
   return { group, versions, plural, kind, namespaced, columns, sidebar: true }
 }
 
-function count(value: unknown): string {
-  if (!Array.isArray(value)) return ""
-  return String(value.length)
-}

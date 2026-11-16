@@ -1,6 +1,6 @@
 import { pluralKind } from "../resources/catalog"
 import type { KindAction, ResourceKind } from "../resources/types"
-import { show } from "../resources/columns"
+import { read, show } from "../resources/columns"
 
 export interface DiscoveredResource {
   name: string
@@ -49,6 +49,12 @@ export function pack(group: number, resources: readonly CustomResource[]): Custo
 export function namespaceArgs(kind: ResourceKind, namespace: string): string[] {
   if (kind.namespaced && namespace) return ["-n", namespace]
   return []
+}
+
+export function crdNames(payload: string): Set<string> | null {
+  const crds = parseCrds(payload)
+  if (!crds) return null
+  return new Set(crds.map((crd) => `${crd.plural}.${crd.group}`))
 }
 
 export function installCustom(packs: readonly CustomPack[], crdPayload: string, rows: readonly DiscoveredResource[]): ResourceKind[] {
@@ -115,20 +121,20 @@ function parseCrds(payload: string): ServedCrd[] | null {
   } catch {
     return null
   }
-  if (!parsed || typeof parsed !== "object" || !("items" in parsed) || !Array.isArray(parsed.items)) return null
-  return parsed.items.flatMap((item) => {
-    const spec = asRecord(asRecord(item)?.spec)
-    const names = asRecord(spec?.names)
-    const group = show(spec?.group)
-    const plural = show(names?.plural)
-    if (!spec || !group || !plural) return []
+  const items = read(parsed, "items")
+  if (!Array.isArray(items)) return null
+  return items.flatMap((item) => {
+    const spec = read(item, "spec")
+    const group = show(read(spec, "group"))
+    const plural = show(read(spec, "names", "plural"))
+    if (!group || !plural) return []
     return [
       {
         group,
         plural,
-        scope: show(spec.scope),
-        shorts: arrayOf(names?.shortNames),
-        served: servedVersions(spec.versions),
+        scope: show(read(spec, "scope")),
+        shorts: strings(read(spec, "names", "shortNames")),
+        served: servedVersions(read(spec, "versions")),
       },
     ]
   })
@@ -137,22 +143,16 @@ function parseCrds(payload: string): ServedCrd[] | null {
 function servedVersions(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   return value.flatMap((version) => {
-    const row = asRecord(version)
-    const name = show(row?.name)
-    if (!name || row?.served === false) return []
+    const name = show(read(version, "name"))
+    if (!name || read(version, "served") === false) return []
     return [name]
   })
 }
 
-function arrayOf(value: unknown): string[] {
+function strings(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   return value.flatMap((item) => {
     const text = show(item)
     return text ? [text] : []
   })
-}
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
-  return value as Record<string, unknown>
 }

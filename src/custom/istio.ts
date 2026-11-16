@@ -1,5 +1,5 @@
 import type { KubernetesObject } from "../resources/types"
-import { column, labelText, listed, read, show, texts } from "../resources/columns"
+import { column, joinList, labelText, listed, read, show, texts } from "../resources/columns"
 import { pack, type CustomResource } from "./install"
 
 const networking = "networking.istio.io"
@@ -70,20 +70,15 @@ function workload(object: KubernetesObject): string {
 function gatewayHosts(object: KubernetesObject): string {
   const servers = read(object.spec, "servers")
   if (!Array.isArray(servers)) return ""
-  return servers.flatMap((server) => {
-    const hosts = read(server, "hosts")
-    return Array.isArray(hosts) ? hosts.flatMap((host) => {
-      const text = show(host)
-      return text ? [text] : []
-    }) : []
-  }).join(",")
+  return joinList(
+    servers.flatMap((server) => {
+      const hosts = read(server, "hosts")
+      return Array.isArray(hosts) ? hosts : []
+    }),
+    (host) => show(host),
+  )
 }
 
 function issuers(object: KubernetesObject): string {
-  const rules = read(object.spec, "jwtRules")
-  if (!Array.isArray(rules)) return ""
-  return rules.flatMap((rule) => {
-    const issuer = show(read(rule, "issuer"))
-    return issuer ? [issuer] : []
-  }).join(",")
+  return joinList(read(object.spec, "jwtRules"), (rule) => show(read(rule, "issuer")))
 }

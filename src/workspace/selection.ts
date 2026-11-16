@@ -1,6 +1,7 @@
 import type { Cluster } from "../cluster/cluster"
 import { findKind, ownedItems, podContainers, type KubernetesObject, type PodContainer } from "../resources"
-import { nameMatches } from "./filter"
+import { orderedContainers } from "./containers"
+import { nameMatches, rowAfterFilter } from "./filter"
 import type { Session } from "./session"
 import { sortByText } from "./sort"
 
@@ -14,13 +15,31 @@ export function visibleRows(session: Session, cluster: Cluster): VisibleRows | n
     const pod = scopedPod(session, cluster)
     const rows = pod ? podContainers(pod) : []
     const query = session.containerFilter()
-    return { type: "containers", scope, rows, shown: rows.filter((row) => nameMatches(row.name, query)), query }
+    const matched = rows.filter((row) => nameMatches(row.name, query))
+    return { type: "containers", scope, rows, shown: orderedContainers(matched, session.containerSort()), query }
   }
   const id = session.activeId()
   if (!id) return null
   const rows = ownedItems(cluster.snapshot(id).items, session.activeTab()?.owner ?? null)
   const query = session.filter()
   return { type: "resources", rows, shown: listedItems(session, cluster, id), query }
+}
+
+export function rowAt<T>(rows: readonly T[], index: number): T | undefined {
+  if (rows.length === 0) return undefined
+  return rows[Math.min(Math.max(index, 0), rows.length - 1)]
+}
+
+export function nextVisibleIndex(session: Session, cluster: Cluster, next: string): number | null {
+  const visible = visibleRows(session, cluster)
+  if (!visible) return null
+  if (visible.type === "containers") {
+    const ordered = orderedContainers(visible.rows, session.containerSort())
+    return rowAfterFilter(ordered, session.containerIndex(), visible.query, next, (row) => row.name)
+  }
+  const id = session.activeId()
+  if (!id) return null
+  return rowAfterFilter(sortedObjects(session, cluster, id, visible.rows), session.rowIndex(id), visible.query, next, (row) => row.metadata?.name ?? "")
 }
 
 export function scopedPod(session: Session, cluster: Cluster): KubernetesObject | null {
@@ -37,12 +56,16 @@ export function listedItems(session: Session, cluster: Cluster, id: string): rea
   const items = ownedItems(cluster.snapshot(id).items, owner)
   const query = session.activeId() === id ? session.filter() : ""
   const matched = query ? items.filter((item) => nameMatches(item.metadata?.name ?? "", query)) : items
+  return sortedObjects(session, cluster, id, matched)
+}
+
+function sortedObjects(session: Session, cluster: Cluster, id: string, items: readonly KubernetesObject[]): readonly KubernetesObject[] {
   const sort = session.activeId() === id ? session.sort() : null
-  if (!sort) return matched
+  if (!sort) return items
   const column = findKind(id, cluster.extraKinds())?.columns.find((item) => item.id === sort.column)
-  if (!column) return matched
+  if (!column) return items
   const now = cluster.now()
-  return sortByText(matched, (item) => column.cell(item, now).text, sort.desc)
+  return sortByText(items, (item) => column.cell(item, now).text, sort.desc)
 }
 
 export function currentTarget(session: Session, cluster: Cluster): { kindId: string; name: string; namespace: string; object: KubernetesObject } | null {
@@ -55,7 +78,7 @@ export function currentTarget(session: Session, cluster: Cluster): { kindId: str
   const kindId = session.activeId()
   if (!kindId) return null
   const items = listedItems(session, cluster, kindId)
-  const item = items[Math.min(session.rowIndex(kindId), Math.max(items.length - 1, 0))]
+  const item = rowAt(items, session.rowIndex(kindId))
   const name = item?.metadata?.name
   if (!item || !name) return null
   return { kindId, name, namespace: item.metadata?.namespace ?? "", object: item }

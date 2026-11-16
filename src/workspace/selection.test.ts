@@ -54,6 +54,12 @@ test("visible rows follow the container list or the filtered resource list", () 
     if (narrowed?.type !== "containers") return
     expect(narrowed.shown.map((row) => row.name)).toEqual(["sidecar"])
     expect(narrowed.rows.map((row) => row.name)).toEqual(["app", "sidecar"])
+    session.setContainerFilter("")
+    session.sortBy("name")
+    session.sortBy("name")
+    const reversed = visibleRows(session, cluster([pod, worker]))
+    if (reversed?.type !== "containers") return
+    expect(reversed.shown.map((row) => row.name)).toEqual(["sidecar", "app"])
     dispose()
   })
 })

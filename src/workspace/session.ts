@@ -159,26 +159,33 @@ export function createSession(initial: readonly { id: string }[]): Session {
     return kindIndex(id) >= 0 || findKind(id, extra()) !== undefined
   }
 
+  function patchActive(change: (tab: WorkspaceTab) => WorkspaceTab) {
+    const active = activeTabId()
+    commitTabs((current) => {
+      const tab = current.find((item) => item.id === active)
+      if (!tab) return current
+      const next = change(tab)
+      if (next === tab) return current
+      return current.map((item) => (item.id === active ? next : item))
+    })
+  }
+
   function retarget(id: string, owner: OwnerScope | null) {
     if (!canOpen(id)) return
-    const active = activeTabId()
-    commitTabs((current) =>
-      current.map((tab) => {
-        if (tab.id !== active) return tab
-        const same = tab.kindId === id && ownerSame(tab.owner, owner)
-        return {
-          ...tab,
-          kindId: id,
-          resource: null,
-          owner,
-          containers: null,
-          filter: same ? tab.filter : "",
-          containerFilter: same ? tab.containerFilter : "",
-          sort: same ? tab.sort : null,
-          containerSort: null,
-        }
-      }),
-    )
+    patchActive((tab) => {
+      const same = tab.kindId === id && ownerSame(tab.owner, owner)
+      return {
+        ...tab,
+        kindId: id,
+        resource: null,
+        owner,
+        containers: null,
+        filter: same ? tab.filter : "",
+        containerFilter: same ? tab.containerFilter : "",
+        sort: same ? tab.sort : null,
+        containerSort: null,
+      }
+    })
     setFocus("list")
     focusKind(id)
   }
@@ -291,32 +298,24 @@ export function createSession(initial: readonly { id: string }[]): Session {
   }
 
   function showContainers(name: string, namespace: string) {
-    const active = activeTabId()
     const previous = currentTab()?.containers
     const switching = Boolean(previous && (previous.name !== name || previous.namespace !== namespace))
     setPick(null)
-    commitTabs((current) =>
-      current.map((tab) =>
-        tab.id === active
-          ? {
-              ...tab,
-              resource: null,
-              containers: switching || !previous ? { name, namespace } : previous,
-              containerFilter: switching ? "" : tab.containerFilter,
-              containerSort: switching ? null : tab.containerSort,
-            }
-          : tab,
-      ),
-    )
+    patchActive((tab) => ({
+      ...tab,
+      resource: null,
+      containers: { name, namespace },
+      containerFilter: switching ? "" : tab.containerFilter,
+      containerSort: switching ? null : tab.containerSort,
+    }))
     const opened = currentTab()
     if (opened?.containers) setRows((current) => ({ ...current, [containerRow(opened)]: 0 }))
     setFocus("list")
   }
 
   function closeContainers() {
-    const active = activeTabId()
     if (!currentTab()?.containers) return
-    commitTabs((current) => current.map((tab) => (tab.id === active ? { ...tab, containers: null } : tab)))
+    patchActive((tab) => ({ ...tab, containers: null }))
     setFocus("list")
   }
 
@@ -342,33 +341,24 @@ export function createSession(initial: readonly { id: string }[]): Session {
 
   function openDetail(kindId: string, name: string, namespace: string) {
     setPick(null)
-    const active = activeTabId()
-    commitTabs((current) =>
-      current.map((tab) => (tab.id === active ? { ...tab, kindId, resource: { name, namespace, format: "describe", logs: false, follow: false } } : tab)),
-    )
+    patchActive((tab) => ({ ...tab, kindId, resource: { name, namespace, format: "describe", logs: false, follow: false } }))
     setFocus("detail")
     focusKind(kindId)
   }
 
   function openLogs(kindId: string, name: string, namespace: string) {
     setPick(null)
-    const active = activeTabId()
-    commitTabs((current) =>
-      current.map((tab) =>
-        tab.id === active ? { ...tab, kindId, resource: { name, namespace, format: tab.resource?.format ?? "describe", logs: true, follow: false } } : tab,
-      ),
-    )
+    patchActive((tab) => ({
+      ...tab,
+      kindId,
+      resource: { name, namespace, format: tab.resource?.format ?? "describe", logs: true, follow: false },
+    }))
     setFocus("detail")
     focusKind(kindId)
   }
 
   function toggleFollow() {
-    const active = activeTabId()
-    commitTabs((current) =>
-      current.map((tab) =>
-        tab.id === active && tab.resource?.logs ? { ...tab, resource: { ...tab.resource, follow: !tab.resource.follow } } : tab,
-      ),
-    )
+    patchActive((tab) => (tab.resource?.logs ? { ...tab, resource: { ...tab.resource, follow: !tab.resource.follow } } : tab))
   }
 
   function logTarget(items: readonly { metadata?: { name?: string; namespace?: string } }[]): LogTarget | null {
@@ -387,20 +377,12 @@ export function createSession(initial: readonly { id: string }[]): Session {
   }
 
   function updateFormat(format: DetailTab) {
-    const id = activeTabId()
-    commitTabs((current) =>
-      current.map((tab) =>
-        tab.id === id && tab.resource && tab.resource.format !== format
-          ? { ...tab, resource: { ...tab.resource, format } }
-          : tab,
-      ),
-    )
+    patchActive((tab) => (tab.resource && tab.resource.format !== format ? { ...tab, resource: { ...tab.resource, format } } : tab))
   }
 
   function closeDetail() {
-    const active = activeTabId()
     if (!currentTab()?.resource) return
-    commitTabs((current) => current.map((tab) => (tab.id === active ? { ...tab, resource: null } : tab)))
+    patchActive((tab) => ({ ...tab, resource: null }))
     setFocus("list")
   }
 
@@ -426,33 +408,16 @@ export function createSession(initial: readonly { id: string }[]): Session {
   }
 
   function setFilter(query: string) {
-    const active = activeTabId()
-    commitTabs((current) => {
-      const tab = current.find((item) => item.id === active)
-      if (!tab || tab.filter === query) return current
-      return current.map((item) => (item.id === active ? { ...item, filter: query } : item))
-    })
+    patchActive((tab) => (tab.filter === query ? tab : { ...tab, filter: query }))
   }
 
   function setContainerFilter(query: string) {
-    const active = activeTabId()
-    commitTabs((current) => {
-      const tab = current.find((item) => item.id === active)
-      if (!tab || tab.containerFilter === query) return current
-      return current.map((item) => (item.id === active ? { ...item, containerFilter: query } : item))
-    })
+    patchActive((tab) => (tab.containerFilter === query ? tab : { ...tab, containerFilter: query }))
   }
 
   function sortBy(column: string) {
-    const active = activeTabId()
     const containers = Boolean(currentTab()?.containers)
-    commitTabs((current) =>
-      current.map((tab) => {
-        if (tab.id !== active) return tab
-        if (containers) return { ...tab, containerSort: nextSort(tab.containerSort, column) }
-        return { ...tab, sort: nextSort(tab.sort, column) }
-      }),
-    )
+    patchActive((tab) => (containers ? { ...tab, containerSort: nextSort(tab.containerSort, column) } : { ...tab, sort: nextSort(tab.sort, column) }))
   }
 
   function setActiveRow(index: number) {

@@ -17,22 +17,6 @@ export interface EditTarget {
 
 const deleteAction: EditAction = { key: "d", label: "Delete", id: "delete" }
 
-const deleteOnly = new Set([
-  "configmaps",
-  "hpas",
-  "pdbs",
-  "namespaces",
-  "secrets",
-  "serviceaccounts",
-  "resourcequotas",
-  "limitranges",
-  "rolebindings",
-  "networkpolicies",
-  "storageclasses",
-  "pvcs",
-  "pvs",
-])
-
 export function editActions(kindId: string, suspended = false, extra: readonly ResourceKind[] = []): EditAction[] {
   const actions = kindActions(kindId, suspended, extra)
   if (actions.length === 0 && !builtinEditable(kindId)) return []
@@ -68,9 +52,9 @@ function kindActions(kindId: string, suspended: boolean, extra: readonly Resourc
     ]
   }
   const kind = findKind(kindId, extra)
-  if (deleteOnly.has(kindId) || kind?.deletable) {
-    const extra = (kind?.actions ?? []).map((action) => ({ key: action.key, label: action.label, id: action.id }))
-    return [deleteAction, ...extra]
+  if (kind?.deletable) {
+    const extraActions = (kind.actions ?? []).map((action) => ({ key: action.key, label: action.label, id: action.id }))
+    return [deleteAction, ...extraActions]
   }
   return []
 }
@@ -209,8 +193,7 @@ function builtinEditable(kindId: string): boolean {
 }
 
 function known(kindId: string, actionId: string, extra: readonly ResourceKind[]): boolean {
-  if ((kindId === "jobs" || kindId === "cronjobs") && (actionId === "suspend" || actionId === "resume")) return true
-  return editActions(kindId, false, extra).some((action) => action.id === actionId)
+  return editActions(kindId, actionId === "resume", extra).some((action) => action.id === actionId)
 }
 
 function suspendAction(suspended: boolean): EditAction {

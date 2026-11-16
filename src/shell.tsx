@@ -8,7 +8,7 @@ import { detailContent } from "./screen/detail-content"
 import { scrollDetail } from "./screen/detail-scroll"
 import { LogView } from "./screen/log-view"
 import { NamespaceList, filteredNamespaces, namespaceLabel, namespaceOptions } from "./screen/namespace-list"
-import { ContainerList, containerColumns, orderedContainers } from "./screen/container-list"
+import { ContainerList } from "./screen/container-list"
 import { ResourceList } from "./screen/resource-list"
 import { ResourceView } from "./screen/resource-view"
 import { Sidebar } from "./screen/sidebar"
@@ -22,7 +22,8 @@ import { createEditMode } from "./workspace/edit"
 import { rowAfterFilter } from "./workspace/filter"
 import { runKey } from "./workspace/input"
 import { controlledKind, controllerOf, findKind, formatAge, kindIdFor, kubernetesKind } from "./resources"
-import { currentTarget, listedItems, visibleRows } from "./workspace/selection"
+import { containerColumns } from "./workspace/containers"
+import { currentTarget, listedItems, nextVisibleIndex, rowAt, visibleRows } from "./workspace/selection"
 import { columnLetters } from "./workspace/sort"
 import { splitBorder, theme } from "./screen/theme"
 
@@ -171,16 +172,13 @@ export function Shell() {
 
   const applyFilter = (next: string) => {
     const visible = visibleRows(session, cluster)
-    if (!visible) return
+    const index = nextVisibleIndex(session, cluster, next)
+    if (!visible || index == null) return
     if (visible.type === "containers") {
-      const index = rowAfterFilter(visible.rows, session.containerIndex(), visible.query, next, (row) => row.name)
       session.setContainerFilter(next)
       session.setActiveRow(index)
       return
     }
-    const id = session.activeId()
-    if (!id) return
-    const index = rowAfterFilter(visible.rows, session.rowIndex(id), visible.query, next, (row) => row.metadata?.name ?? "")
     session.setFilter(next)
     session.setActiveRow(index)
   }
@@ -193,34 +191,29 @@ export function Shell() {
   }
 
   const columnForLetter = (letter: string): string | null => {
-    const headers = containerScope() ? containerColumns.map((column) => column.header) : activeKind()?.columns.map((column) => column.header)
-    const ids = containerScope() ? containerColumns.map((column) => column.id) : activeKind()?.columns.map((column) => column.id)
-    if (!headers || !ids) return null
-    const index = columnLetters(headers).indexOf(letter)
-    if (index < 0) return null
-    return ids[index] ?? null
+    const columns = containerScope() ? containerColumns : activeKind()?.columns
+    if (!columns) return null
+    const index = columnLetters(columns.map((column) => column.header)).indexOf(letter)
+    return columns[index]?.id ?? null
   }
 
   const sortByColumn = (column: string) => {
     const visible = visibleRows(session, cluster)
     if (!visible) return
     if (visible.type === "containers") {
-      const ordered = orderedContainers(visible.shown, session.containerSort())
-      const selected = ordered[Math.min(session.containerIndex(), Math.max(ordered.length - 1, 0))]
+      const selected = rowAt(visible.shown, session.containerIndex())
       session.sortBy(column)
       const next = visibleRows(session, cluster)
-      if (!selected || next?.type !== "containers") return
-      const found = orderedContainers(next.shown, session.containerSort()).findIndex((row) => row.name === selected.name && row.type === selected.type)
+      const found = selected && next?.type === "containers" ? next.shown.indexOf(selected) : -1
       if (found >= 0) session.setActiveRow(found)
       return
     }
     const id = session.activeId()
     if (!id) return
-    const selected = visible.shown[Math.min(session.rowIndex(id), Math.max(visible.shown.length - 1, 0))]
+    const selected = rowAt(visible.shown, session.rowIndex(id))
     session.sortBy(column)
     const next = visibleRows(session, cluster)
-    if (!selected || next?.type !== "resources") return
-    const found = next.shown.indexOf(selected)
+    const found = selected && next?.type === "resources" ? next.shown.indexOf(selected) : -1
     if (found >= 0) session.setActiveRow(found)
   }
 
@@ -309,7 +302,7 @@ export function Shell() {
         const id = session.activeId()
         if (!id) return
         const items = listedItems(session, cluster, id)
-        const item = items[Math.min(session.rowIndex(id), Math.max(items.length - 1, 0))]
+        const item = rowAt(items, session.rowIndex(id))
         const name = item?.metadata?.name
         if (!name) return
         session.openDetail(id, name, item.metadata?.namespace ?? "")

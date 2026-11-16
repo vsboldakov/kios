@@ -1,5 +1,5 @@
 import type { KindAction, KubernetesObject } from "../resources/types"
-import { column, listed, messageColumn, read, readyColumn, show, suspendColumn } from "../resources/columns"
+import { column, joinList, listed, messageColumn, qualifiedName, read, readyColumn, show, suspendColumn } from "../resources/columns"
 import { namespaceArgs, pack, type CustomResource } from "./install"
 
 const source = "source.toolkit.fluxcd.io"
@@ -96,11 +96,7 @@ function fluxResource(
 }
 
 function ref(object: KubernetesObject, key: string): string {
-  const kind = show(read(object.spec, key, "kind"))
-  const name = show(read(object.spec, key, "name"))
-  if (!name) return ""
-  if (!kind) return name
-  return `${kind}/${name}`
+  return qualifiedName(show(read(object.spec, key, "kind")), show(read(object.spec, key, "name")))
 }
 
 function helmChart(object: KubernetesObject): string {
@@ -116,12 +112,5 @@ function helmRevision(object: KubernetesObject): string {
 }
 
 function eventSources(object: KubernetesObject): string {
-  const sources = read(object.spec, "eventSources")
-  if (!Array.isArray(sources)) return ""
-  return sources.flatMap((item) => {
-    const kind = show(read(item, "kind"))
-    const name = show(read(item, "name"))
-    if (!name) return []
-    return [kind ? `${kind}/${name}` : name]
-  }).join(",")
+  return joinList(read(object.spec, "eventSources"), (item) => qualifiedName(show(read(item, "kind")), show(read(item, "name"))))
 }

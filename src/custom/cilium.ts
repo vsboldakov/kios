@@ -1,5 +1,5 @@
 import type { KubernetesObject } from "../resources/types"
-import { column, labelText, listed, read, show, statusColumn } from "../resources/columns"
+import { column, joinList, labelText, listed, read, show, statusColumn } from "../resources/columns"
 import { pack, type CustomResource } from "./install"
 
 const group = "cilium.io"
@@ -39,12 +39,7 @@ function resource(
 }
 
 function endpointIPv4(object: KubernetesObject): string {
-  const items = read(object.status, "networking", "addressing")
-  if (!Array.isArray(items)) return ""
-  return items.flatMap((item) => {
-    const text = show(read(item, "ipv4"))
-    return text ? [text] : []
-  }).join(",")
+  return joinList(read(object.status, "networking", "addressing"), (item) => show(read(item, "ipv4")))
 }
 
 function nodeIP(object: KubernetesObject): string {
@@ -56,16 +51,6 @@ function nodeIP(object: KubernetesObject): string {
 
 function poolCidrs(object: KubernetesObject): string {
   const blocks = read(object.spec, "blocks")
-  if (Array.isArray(blocks)) {
-    return blocks.flatMap((item) => {
-      const cidr = show(read(item, "cidr"))
-      return cidr ? [cidr] : []
-    }).join(",")
-  }
-  const cidrs = read(object.spec, "cidrs")
-  if (!Array.isArray(cidrs)) return ""
-  return cidrs.flatMap((item) => {
-    const cidr = show(item) || show(read(item, "cidr"))
-    return cidr ? [cidr] : []
-  }).join(",")
+  if (Array.isArray(blocks)) return joinList(blocks, (item) => show(read(item, "cidr")))
+  return joinList(read(object.spec, "cidrs"), (item) => show(item) || show(read(item, "cidr")))
 }

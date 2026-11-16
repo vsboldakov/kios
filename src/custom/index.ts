@@ -18,6 +18,7 @@ import { volumesnapshot } from "./volumesnapshot"
 export const packs = [cilium, flux, prometheus, istio, volumesnapshot, argocd, certmanager, karpenter, keda, kyverno, velero, linkerd]
 
 export type { DiscoveredResource } from "./install"
+export { crdNames } from "./install"
 
 export function claimsCustom(name: string, group: string): boolean {
   return packs.some((item) => item.resources.some((resource) => resource.plural === name && resource.group === group))

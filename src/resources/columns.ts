@@ -37,7 +37,7 @@ export function readyColumn(): Column {
     header: "READY",
     width: 5,
     cell: (object) => {
-      const status = condition(object, "Ready")
+      const status = conditionText(object, "Ready")
       if (status === "True") return { text: "True", tone: "ready" }
       if (status === "False") return { text: "False", tone: "progress" }
       return { text: status }
@@ -103,13 +103,32 @@ export function count(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0
 }
 
-export function texts(value: unknown): string {
-  if (typeof value === "string") return value
+export function lengthOf(value: unknown): string {
+  if (!Array.isArray(value)) return ""
+  return String(value.length)
+}
+
+export function qualifiedName(prefix: string, name: string): string {
+  if (!name) return ""
+  if (!prefix) return name
+  return `${prefix}/${name}`
+}
+
+export function joinList(value: unknown, text: (item: unknown) => string): string {
   if (!Array.isArray(value)) return ""
   return value.flatMap((item) => {
-    const text = show(item)
-    return text ? [text] : []
+    const shown = text(item)
+    return shown ? [shown] : []
   }).join(",")
+}
+
+export function conditionText(object: KubernetesObject, type: string): string {
+  return object.status?.conditions?.find((item) => item.type === type)?.status ?? ""
+}
+
+export function texts(value: unknown): string {
+  if (typeof value === "string") return value
+  return joinList(value, (item) => show(item))
 }
 
 export function labelText(value: unknown): string {
@@ -123,10 +142,6 @@ export function labelText(value: unknown): string {
 
 export function read(value: unknown, ...path: string[]): unknown {
   return path.reduce<unknown>((current, key) => asRecord(current)?.[key], value)
-}
-
-function condition(object: KubernetesObject, type: string): string {
-  return object.status?.conditions?.find((item) => item.type === type)?.status ?? ""
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {

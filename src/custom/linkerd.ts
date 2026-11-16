@@ -1,5 +1,5 @@
 import type { KubernetesObject } from "../resources/types"
-import { column, labelText, listed, read, show, texts } from "../resources/columns"
+import { column, joinList, labelText, lengthOf, listed, qualifiedName, read, show, texts } from "../resources/columns"
 import { pack, type CustomResource } from "./install"
 
 const policy = "policy.linkerd.io"
@@ -17,7 +17,7 @@ export const linkerd = pack(20, [
   ]), ["saz"], true),
   link("authorizationpolicies", "AuthorizationPolicy", ["v1alpha1"], listed(true, [
     column("target", "TARGET", 18, targetRef, true),
-    column("authn", "AUTHN", 6, (object) => count(read(object.spec, "requiredAuthenticationRefs"))),
+    column("authn", "AUTHN", 6, (object) => lengthOf(read(object.spec, "requiredAuthenticationRefs"))),
   ]), ["authzpolicy"], true),
   link("meshtlsauthentications", "MeshTLSAuthentication", ["v1alpha1"], listed(true, [
     column("identities", "IDENTITIES", 18, (object) => texts(read(object.spec, "identities")), true),
@@ -26,7 +26,7 @@ export const linkerd = pack(20, [
     column("networks", "NETWORKS", 18, networks, true),
   ]), ["netauth"]),
   link("serviceprofiles", "ServiceProfile", ["v1alpha2", "v1alpha1"], listed(true, [
-    column("routes", "ROUTES", 6, (object) => count(read(object.spec, "routes")), true),
+    column("routes", "ROUTES", 6, (object) => lengthOf(read(object.spec, "routes")), true),
   ]), ["sp"], true, "linkerd.io"),
 ])
 
@@ -43,11 +43,7 @@ function link(
 }
 
 function targetRef(object: KubernetesObject): string {
-  const kind = show(read(object.spec, "targetRef", "kind"))
-  const name = show(read(object.spec, "targetRef", "name"))
-  if (!name) return ""
-  if (!kind) return name
-  return `${kind}/${name}`
+  return qualifiedName(show(read(object.spec, "targetRef", "kind")), show(read(object.spec, "targetRef", "name")))
 }
 
 function client(object: KubernetesObject): string {
@@ -56,22 +52,9 @@ function client(object: KubernetesObject): string {
   if (Array.isArray(identities) && identities.length) return texts(identities)
   const accounts = read(object.spec, "client", "meshTLS", "serviceAccounts")
   if (!Array.isArray(accounts)) return ""
-  return accounts.flatMap((item) => {
-    const name = show(read(item, "name"))
-    return name ? [name] : []
-  }).join(",")
+  return joinList(accounts, (item) => show(read(item, "name")))
 }
 
 function networks(object: KubernetesObject): string {
-  const items = read(object.spec, "networks")
-  if (!Array.isArray(items)) return ""
-  return items.flatMap((item) => {
-    const cidr = show(item) || show(read(item, "cidr"))
-    return cidr ? [cidr] : []
-  }).join(",")
-}
-
-function count(value: unknown): string {
-  if (!Array.isArray(value)) return ""
-  return String(value.length)
+  return joinList(read(object.spec, "networks"), (item) => show(item) || show(read(item, "cidr")))
 }

@@ -2,9 +2,8 @@ import type { KeyEvent } from "@opentui/core"
 import { createMemo, createSignal } from "solid-js"
 import { commandLine, declaredPorts, editActions, editCommand, portMappings, shellContainer } from "./actions"
 import type { Cluster } from "../cluster/cluster"
-import { findKind, podContainers, type KindCommand } from "../resources"
-import { nameMatches } from "./filter"
-import { currentTarget, scopedPod } from "./selection"
+import { findKind, type KindCommand } from "../resources"
+import { currentTarget, rowAt, scopedPod, visibleRows } from "./selection"
 import type { Session } from "./session"
 
 export function createEditMode({
@@ -78,11 +77,9 @@ export function createEditMode({
   }
 
   const pickedContainer = () => {
-    if (session.activeId() !== "pods" || session.focus() !== "list" || !session.containerScope()) return undefined
-    const pod = scopedPod(session, cluster)
-    const query = session.containerFilter()
-    const rows = (pod ? podContainers(pod) : []).filter((row) => nameMatches(row.name, query))
-    return rows[Math.min(session.containerIndex(), Math.max(rows.length - 1, 0))]?.name
+    const visible = visibleRows(session, cluster)
+    if (visible?.type !== "containers" || session.focus() !== "list") return undefined
+    return rowAt(visible.shown, session.containerIndex())?.name
   }
 
   const runEdit = (actionId: string) => {

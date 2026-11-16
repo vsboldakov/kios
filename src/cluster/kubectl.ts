@@ -1,3 +1,4 @@
+import { parseApiTable } from "../resources/api-table"
 import { builtinKinds } from "../resources/builtin"
 import { mergeUsage } from "../resources/quantity"
 import type { KindCommand, KubernetesObject, ResourceKind } from "../resources"
@@ -32,7 +33,7 @@ export function createKubectlClient(context = ""): ClusterClient {
       return mergeUsage(parseList(payload), metrics)
     },
     inspect: (kind, name, namespace) => inspectResource(kind, name, namespace),
-    logs: (kind, name, namespace) => logsFor(kind, name, namespace, false),
+    logs: (kind, name, namespace) => logsFor(kind, name, namespace),
     followLogs: (kind, name, namespace, onText) => followLogs(kind, name, namespace, onText),
     execute: (command) => execute(command),
     resources: () => discoverKinds(),
@@ -74,8 +75,8 @@ function logArgs(kind: ResourceKind, name: string, namespace: string, follow: bo
   return ["logs", ...(follow ? ["-f"] : []), "--tail=500", "--all-containers", "--prefix", ...scope, `${kind.resource}/${name}`]
 }
 
-async function logsFor(kind: ResourceKind, name: string, namespace: string, follow: boolean): Promise<string> {
-  return capture(kubectl(logArgs(kind, name, namespace, follow)))
+async function logsFor(kind: ResourceKind, name: string, namespace: string): Promise<string> {
+  return capture(kubectl(logArgs(kind, name, namespace, false)))
 }
 
 function followLogs(kind: ResourceKind, name: string, namespace: string, onText: (text: string) => void): () => void {
@@ -376,35 +377,19 @@ export function lookupResource(table: string, resource: string): { path: string;
 
 function indexResources(table: string): Map<string, { path: string; watchable: boolean }> {
   const map = new Map<string, { path: string; watchable: boolean }>()
-  for (const line of table.split("\n")) {
-    const row = parseApiRow(line)
-    if (!row) continue
+  for (const row of parseApiTable(table)) {
     const target = {
       path: row.group ? `/apis/${row.group}/${row.version}/${row.name}` : `/api/${row.version}/${row.name}`,
       watchable: row.verbs.has("watch"),
     }
     const qualified = row.group ? `${row.name}.${row.group}` : row.name
     map.set(qualified, target)
+    // kubectl get accepts plural.version.group, which is how a custom resource pins its served version
+    if (row.group) map.set(`${row.name}.${row.version}.${row.group}`, target)
     // shortcut: the bare name keeps the first row; a core row's key is that name, so it replaces metrics.k8s.io
     if (!map.has(row.name)) map.set(row.name, target)
   }
   return map
-}
-
-function parseApiRow(line: string): { name: string; group: string; version: string; verbs: Set<string> } | null {
-  const tokens = line.trim().split(/\s+/).filter(Boolean)
-  const namespacedAt = tokens.findIndex((token) => token === "true" || token === "false")
-  if (namespacedAt < 2 || namespacedAt > 3 || namespacedAt + 2 >= tokens.length) return null
-  const name = tokens[0] ?? ""
-  const apiversion = tokens[namespacedAt - 1] ?? ""
-  if (!name) return null
-  const slash = apiversion.lastIndexOf("/")
-  return {
-    name,
-    group: slash >= 0 ? apiversion.slice(0, slash) : "",
-    version: slash >= 0 ? apiversion.slice(slash + 1) : apiversion,
-    verbs: new Set((tokens[namespacedAt + 2] ?? "").split(",").filter(Boolean)),
-  }
 }
 
 function readList(payload: string): { items: KubernetesObject[]; resourceVersion: string } {

@@ -54,6 +54,9 @@ test("a row without watch is unwatchable", () => {
   })
 })
 
-test("a custom plural.version.group resource is unwatchable", () => {
-  expect(lookupResource(table, "volumesnapshots.v1.snapshot.storage.k8s.io")).toBeNull()
+test("a versioned custom resource name watches that row", () => {
+  expect(lookupResource(table, "volumesnapshots.v1.snapshot.storage.k8s.io")).toEqual({
+    path: "/apis/snapshot.storage.k8s.io/v1/volumesnapshots",
+    watchable: true,
+  })
 })

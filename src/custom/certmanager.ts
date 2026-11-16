@@ -1,5 +1,5 @@
 import type { KubernetesObject } from "../resources/types"
-import { column, listed, messageColumn, read, readyColumn, show, statusColumn } from "../resources/columns"
+import { column, listed, messageColumn, qualifiedName, read, readyColumn, show, statusColumn } from "../resources/columns"
 import { pack, type CustomResource } from "./install"
 
 const group = "cert-manager.io"
@@ -54,10 +54,7 @@ function cert(
 
 function issuerRef(object: KubernetesObject): string {
   const kind = show(read(object.spec, "issuerRef", "kind"))
-  const name = show(read(object.spec, "issuerRef", "name"))
-  if (!name) return ""
-  if (!kind || kind === "Issuer") return name
-  return `${kind}/${name}`
+  return qualifiedName(kind === "Issuer" ? "" : kind, show(read(object.spec, "issuerRef", "name")))
 }
 
 function issuerType(object: KubernetesObject): string {

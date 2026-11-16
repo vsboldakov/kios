@@ -1,5 +1,5 @@
 import type { KubernetesObject } from "../resources/types"
-import { column, labelText, listed, read, show } from "../resources/columns"
+import { column, labelText, lengthOf, listed, read, show } from "../resources/columns"
 import { pack, type CustomResource } from "./install"
 
 const group = "monitoring.coreos.com"
@@ -27,7 +27,7 @@ export const prometheus = pack(11, [
     column("module", "MODULE", 12, (object) => show(read(object.spec, "module"))),
   ])),
   prom(current, "prometheusrules", "PrometheusRule", listed(true, [
-    column("groups", "GROUPS", 6, (object) => count(read(object.spec, "groups"))),
+    column("groups", "GROUPS", 6, (object) => lengthOf(read(object.spec, "groups"))),
   ]), true),
   prom(["v1beta1", "v1alpha1"], "scrapeconfigs", "ScrapeConfig", listed(true, [
     column("job", "JOB", 16, (object) => show(read(object.spec, "jobName")), true),
@@ -47,7 +47,3 @@ function replicas(object: KubernetesObject): string {
   return `${ready}/${desired}`
 }
 
-function count(value: unknown): string {
-  if (!Array.isArray(value)) return ""
-  return String(value.length)
-}

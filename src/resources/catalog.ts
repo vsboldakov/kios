@@ -1,4 +1,4 @@
-import { ageColumn, column, count, labelText, listed, nameColumn, namespaceColumn, show } from "./columns"
+import { ageColumn, column, count, labelText, listed, nameColumn, namespaceColumn, qualifiedName, show } from "./columns"
 import { hpaReplicas, hpaTargets } from "./hpa"
 import { formatAge } from "./format"
 import { formatCpu, formatMemory, formatPercent } from "./quantity"
@@ -113,14 +113,19 @@ function workload(id: string, readCounts: (object: KubernetesObject) => Counts):
   }
 }
 
+function deletableKind(group: number, id: string, resource: string, namespaced: boolean, columns: Column[]): ResourceKind {
+  return kind(group, id, resource, namespaced, columns, true)
+}
+
 function kind(
   group: number,
   id: string,
   resource: string,
   namespaced: boolean,
   columns: Column[],
+  deletable = false,
 ): ResourceKind {
-  return { id, label: kindLabel(id), resource, namespaced, group, columns }
+  return { id, label: kindLabel(id), resource, namespaced, group, columns, ...(deletable ? { deletable: true } : {}) }
 }
 
 function nodeStatus(object: KubernetesObject): Cell {
@@ -171,7 +176,7 @@ export const resourceKinds: readonly ResourceKind[] = [
   workload("deployments", replicaCounts),
   workload("statefulsets", replicaCounts),
   workload("daemonsets", daemonCounts),
-  kind(1, "replicasets", "replicasets", true, workloadColumns(replicaCounts)),
+  workload("replicasets", replicaCounts),
   kind(1, "jobs", "jobs", true, listed(true, [
     column("completions", "COMPLETIONS", 11, (object) => `${count(object.status?.succeeded)}/${count(object.spec?.completions)}`),
     { id: "status", header: "STATUS", width: 12, cell: jobStatus },
@@ -180,14 +185,14 @@ export const resourceKinds: readonly ResourceKind[] = [
     column("schedule", "SCHEDULE", 12, (object) => object.spec?.schedule ?? ""),
     column("suspend", "SUSPEND", 8, (object) => (object.spec?.suspend ? "True" : "False")),
   ])),
-  kind(2, "configmaps", "configmaps", true, listed(true, [
+  deletableKind(2, "configmaps", "configmaps", true, listed(true, [
     column("data", "DATA", 6, (object) => String(Object.keys(object.data ?? {}).length)),
   ])),
-  kind(2, "secrets", "secrets", true, listed(true, [
+  deletableKind(2, "secrets", "secrets", true, listed(true, [
     column("type", "TYPE", 16, (object) => object.type ?? ""),
     column("data", "DATA", 6, (object) => String(Object.keys(object.data ?? {}).length)),
   ])),
-  kind(2, "hpas", "horizontalpodautoscalers", true, [
+  deletableKind(2, "hpas", "horizontalpodautoscalers", true, [
     namespaceColumn,
     { ...nameColumn, width: 18, grow: false },
     {
@@ -197,7 +202,7 @@ export const resourceKinds: readonly ResourceKind[] = [
       grow: true,
       cell: (object) => {
         const target = object.spec?.scaleTargetRef
-        return { text: target?.name ? `${target.kind ?? ""}/${target.name}` : "" }
+        return { text: qualifiedName(target?.kind ?? "", target?.name ?? "") }
       },
     },
     column("targets", "TARGETS", 16, hpaTargets, true),
@@ -206,7 +211,7 @@ export const resourceKinds: readonly ResourceKind[] = [
     { id: "replicas", header: "REPLICAS", width: 8, cell: hpaReplicas },
     ageColumn,
   ]),
-  kind(2, "pdbs", "poddisruptionbudgets", true, listed(true, [
+  deletableKind(2, "pdbs", "poddisruptionbudgets", true, listed(true, [
     column("min", "MIN", 8, (object) => show(object.spec?.minAvailable)),
     column("allowed", "ALLOWED", 8, (object) => show(object.status?.disruptionsAllowed)),
   ])),
@@ -218,38 +223,32 @@ export const resourceKinds: readonly ResourceKind[] = [
     column("class", "CLASS", 12, (object) => object.spec?.ingressClassName ?? ""),
     column("hosts", "HOSTS", 18, (object) => (object.spec?.rules ?? []).map((rule) => rule.host ?? "").filter(Boolean).join(",")),
   ])),
-  kind(3, "networkpolicies", "networkpolicies", true, listed(true, [
+  deletableKind(3, "networkpolicies", "networkpolicies", true, listed(true, [
     column("selector", "SELECTOR", 18, (object) => labelText(object.spec?.podSelector?.matchLabels)),
   ])),
-  kind(4, "storageclasses", "storageclasses", false, listed(false, [
+  deletableKind(4, "storageclasses", "storageclasses", false, listed(false, [
     column("provisioner", "PROVISIONER", 18, (object) => object.provisioner ?? ""),
   ])),
-  kind(4, "pvcs", "persistentvolumeclaims", true, listed(true, [
+  deletableKind(4, "pvcs", "persistentvolumeclaims", true, listed(true, [
     column("status", "STATUS", 12, (object) => object.status?.phase ?? ""),
     column("volume", "VOLUME", 16, (object) => object.spec?.volumeName ?? ""),
     column("capacity", "CAPACITY", 10, (object) => object.status?.capacity?.storage ?? ""),
   ])),
-  kind(4, "pvs", "persistentvolumes", false, listed(false, [
+  deletableKind(4, "pvs", "persistentvolumes", false, listed(false, [
     column("status", "STATUS", 12, (object) => object.status?.phase ?? ""),
     column("capacity", "CAPACITY", 10, (object) => object.spec?.capacity?.storage ?? ""),
-    column("claim", "CLAIM", 18, (object) => {
-      const claim = object.spec?.claimRef
-      return claim?.name ? `${claim.namespace ?? ""}/${claim.name}` : ""
-    }),
+    column("claim", "CLAIM", 18, (object) => qualifiedName(object.spec?.claimRef?.namespace ?? "", object.spec?.claimRef?.name ?? "")),
   ])),
-  kind(5, "namespaces", "namespaces", false, listed(false, [])),
-  kind(5, "resourcequotas", "resourcequotas", true, listed(true, [])),
-  kind(5, "limitranges", "limitranges", true, listed(true, [])),
-  kind(5, "serviceaccounts", "serviceaccounts", true, listed(true, [])),
-  kind(5, "rolebindings", "rolebindings", true, listed(true, [])),
+  deletableKind(5, "namespaces", "namespaces", false, listed(false, [])),
+  deletableKind(5, "resourcequotas", "resourcequotas", true, listed(true, [])),
+  deletableKind(5, "limitranges", "limitranges", true, listed(true, [])),
+  deletableKind(5, "serviceaccounts", "serviceaccounts", true, listed(true, [])),
+  deletableKind(5, "rolebindings", "rolebindings", true, listed(true, [])),
   kind(6, "events", "events", true, [
     namespaceColumn,
     column("type", "TYPE", 8, (object) => object.type ?? ""),
     column("reason", "REASON", 14, (object) => object.reason ?? ""),
-    column("object", "OBJECT", 18, (object) => {
-      const involved = object.involvedObject
-      return involved?.name ? `${involved.kind ?? ""}/${involved.name}` : ""
-    }),
+    column("object", "OBJECT", 18, (object) => qualifiedName(object.involvedObject?.kind ?? "", object.involvedObject?.name ?? "")),
     column("message", "MESSAGE", 12, (object) => object.message ?? "", true),
     eventAge,
   ]),
