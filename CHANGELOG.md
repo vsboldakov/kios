@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0
+
+### Features
+- another batch of improvements: hpa metrics, flags, copy, ns list
+
 ## 0.1.1
 
 ### Fixes
