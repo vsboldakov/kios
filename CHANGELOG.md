@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0
+
+### Features
+- separated and previous container logs
+
 ## 0.3.0
 
 ### Features
