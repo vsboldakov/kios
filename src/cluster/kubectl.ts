@@ -33,8 +33,8 @@ export function createKubectlClient(context = ""): ClusterClient {
       return mergeUsage(parseList(payload), metrics)
     },
     inspect: (kind, name, namespace) => inspectResource(kind, name, namespace),
-    logs: (kind, name, namespace) => logsFor(kind, name, namespace),
-    followLogs: (kind, name, namespace, onText) => followLogs(kind, name, namespace, onText),
+    logs: (kind, name, namespace, previous, container) => logsFor(kind, name, namespace, previous, container),
+    followLogs: (kind, name, namespace, onText, container) => followLogs(kind, name, namespace, onText, container),
     execute: (command) => execute(command),
     resources: () => discoverKinds(),
     watch: (kind, onEvents, namespace = "") => watchResource(kind, onEvents, namespace),
@@ -69,21 +69,22 @@ async function discoverKinds(): Promise<ResourceKind[]> {
   return builtinKinds(table, crds)
 }
 
-function logArgs(kind: ResourceKind, name: string, namespace: string, follow: boolean): string[] {
+export function logArgs(kind: ResourceKind, name: string, namespace: string, follow: boolean, previous = false, container = ""): string[] {
   const scope = kind.namespaced && namespace ? ["-n", namespace] : []
+  const selected = container ? ["-c", container] : ["--all-containers"]
   // shortcut: starts at the last 500 lines, drop --tail when the full history is needed
-  return ["logs", ...(follow ? ["-f"] : []), "--tail=500", "--all-containers", "--prefix", ...scope, `${kind.resource}/${name}`]
+  return ["logs", ...(follow ? ["-f"] : []), ...(previous ? ["--previous"] : []), "--tail=500", ...selected, "--prefix", ...scope, `${kind.resource}/${name}`]
 }
 
-async function logsFor(kind: ResourceKind, name: string, namespace: string): Promise<string> {
-  return capture(kubectl(logArgs(kind, name, namespace, false)))
+async function logsFor(kind: ResourceKind, name: string, namespace: string, previous = false, container = ""): Promise<string> {
+  return capture(kubectl(logArgs(kind, name, namespace, false, previous, container)))
 }
 
-function followLogs(kind: ResourceKind, name: string, namespace: string, onText: (text: string) => void): () => void {
+function followLogs(kind: ResourceKind, name: string, namespace: string, onText: (text: string) => void, container = ""): () => void {
   const bin = kubectlBin()
   let proc: ReturnType<typeof Bun.spawn>
   try {
-    proc = Bun.spawn([bin, ...scoped(logArgs(kind, name, namespace, true))], { stdout: "pipe", stderr: "pipe" } as const)
+    proc = Bun.spawn([bin, ...scoped(logArgs(kind, name, namespace, true, false, container))], { stdout: "pipe", stderr: "pipe" } as const)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     onText(message.includes("ENOENT") ? `${bin} was not found` : message)

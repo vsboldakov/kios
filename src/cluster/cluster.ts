@@ -39,8 +39,8 @@ export interface ClusterClient {
   list(kind: ResourceKind, namespace?: string): Promise<KubernetesObject[]>
   watch?(kind: ResourceKind, onEvents: (events: WatchEvent[]) => void, namespace?: string): () => void
   inspect(kind: ResourceKind, name: string, namespace: string): Promise<ObjectView>
-  logs(kind: ResourceKind, name: string, namespace: string): Promise<string>
-  followLogs(kind: ResourceKind, name: string, namespace: string, onText: (text: string) => void): () => void
+  logs(kind: ResourceKind, name: string, namespace: string, previous?: boolean, container?: string): Promise<string>
+  followLogs(kind: ResourceKind, name: string, namespace: string, onText: (text: string) => void, container?: string): () => void
   execute(command: KindCommand): Promise<void>
   resources?(): Promise<ResourceKind[]>
 }
@@ -58,8 +58,8 @@ export interface Cluster {
   refresh: (kind: ResourceKind) => Promise<void>
   refreshNamespaces: () => Promise<void>
   inspect: (kind: ResourceKind, name: string, namespace: string) => Promise<ObjectView>
-  logs: (kind: ResourceKind, name: string, namespace: string) => Promise<string>
-  followLogs: (kind: ResourceKind, name: string, namespace: string, onText: (text: string) => void) => () => void
+  logs: (kind: ResourceKind, name: string, namespace: string, previous?: boolean, container?: string) => Promise<string>
+  followLogs: (kind: ResourceKind, name: string, namespace: string, onText: (text: string) => void, container?: string) => () => void
   execute: (command: KindCommand) => Promise<void>
   extraKinds: () => readonly ResourceKind[]
 }
@@ -234,8 +234,8 @@ export function createCluster(client: ClusterClient, initialNamespace = ""): Clu
     refresh,
     refreshNamespaces,
     inspect: (kind, name, namespace) => client.inspect(kind, name, namespace),
-    logs: (kind, name, namespace) => client.logs(kind, name, namespace),
-    followLogs: (kind, name, namespace, onText) => client.followLogs(kind, name, namespace, onText),
+    logs: (kind, name, namespace, previous, container) => client.logs(kind, name, namespace, previous, container),
+    followLogs: (kind, name, namespace, onText, container) => client.followLogs(kind, name, namespace, onText, container),
     execute: (command) => client.execute(command),
     extraKinds,
   }

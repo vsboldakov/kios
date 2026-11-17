@@ -1,7 +1,7 @@
 import { createMemo } from "solid-js"
 import { useCluster, useSession } from "../context"
-import { findKind, sidebarLabel } from "../resources"
-import { listedItems, rowAt, visibleRows } from "../workspace/selection"
+import { findKind, logContainerNames, sidebarLabel } from "../resources"
+import { currentTarget, listedItems, rowAt, visibleRows } from "../workspace/selection"
 import { filteredNamespaces, namespaceLabel } from "./namespace-list"
 import { theme } from "./theme"
 
@@ -9,10 +9,25 @@ export function StatusBar(props: { filtering: boolean }) {
   const session = useSession()
   const cluster = useCluster()
 
+  const logNames = () => {
+    const detail = session.detail()
+    if (session.focus() !== "detail" || !detail?.logs) return []
+    const target = currentTarget(session, cluster)
+    return target ? logContainerNames(detail.kindId, target.object) : []
+  }
+
+  const logContainer = () => {
+    const selected = session.detail()?.container ?? ""
+    return logNames().includes(selected) ? selected : ""
+  }
+
   const selection = createMemo(() => {
     const tab = session.activeTab()
     if (tab?.resource && session.focus() === "detail") {
-      return tab.resource.namespace ? `${tab.resource.namespace}/${tab.resource.name}` : tab.resource.name
+      const label = tab.resource.namespace ? `${tab.resource.namespace}/${tab.resource.name}` : tab.resource.name
+      const container = tab.resource.logs ? logContainer() : ""
+      const named = container ? `${label}/${container}` : label
+      return tab.resource.logs && tab.resource.previous ? `${named} previous` : named
     }
     if (session.focus() === "namespaces") {
       const names = filteredNamespaces(cluster.namespaceLocked(), cluster.namespaces(), session.namespaceFilter())
@@ -52,7 +67,11 @@ export function StatusBar(props: { filtering: boolean }) {
       return session.containerFilter() ? "d describe   f filter   esc clear" : "d describe   f filter   shift sort"
     }
     if (focus === "detail" && session.detail()?.logs) {
-      return `d describe   c copy   f ${session.detail()?.follow ? "following" : "follow"}   [ ] tabs${closeHint()}   esc back`
+      const current = session.detail()
+      const follow = current?.follow ? "following" : "follow"
+      const previous = current?.previous ? "current" : "previous"
+      const containers = logNames().length > 1 ? "   ← → container" : ""
+      return `d describe   c copy   f ${follow}   p ${previous}${containers}   [ ] tabs${closeHint()}   esc back`
     }
     if (focus === "detail") return `d describe   c copy   ← → view   esc back${logsHint()}   [ ] tabs${closeHint()}`
     if (focus === "namespaces") {

@@ -2,5 +2,5 @@ export type { KubernetesObject, CellPart, Cell, Column, KindCommand, ResourceKin
 export { objectId, compareObjects, formatAge, fit, fitParts, columnWidth, resolveWidths } from "./format"
 export { isWorkload, resourceKinds, menuKinds, sidebarKinds, sidebarLabel, findKind, kubernetesKind, kindIdFor } from "./catalog"
 export { controlledKind, controllerOf, ownedItems } from "./owners"
-export { podContainers } from "./pods"
+export { podContainers, logContainerNames } from "./pods"
 export type { PodContainer } from "./pods"

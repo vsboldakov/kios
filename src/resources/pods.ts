@@ -1,4 +1,4 @@
-import { ageColumn, column, count, nameColumn, namespaceColumn } from "./columns"
+import { ageColumn, column, count, nameColumn, namespaceColumn, read } from "./columns"
 import type { Cell, CellPart, Column, ContainerSpec, ContainerStatus, KubernetesObject } from "./types"
 
 export interface PodContainer {
@@ -31,6 +31,11 @@ export function podContainers(object: KubernetesObject): PodContainer[] {
     ...containerRows(object.spec?.initContainers, object.status?.initContainerStatuses, "init"),
     ...containerRows(object.spec?.ephemeralContainers, object.status?.ephemeralContainerStatuses, "ephemeral"),
   ]
+}
+
+export function logContainerNames(kindId: string, object: KubernetesObject): string[] {
+  const source = kindId === "pods" ? object : { spec: templateSpec(kindId, object) }
+  return podContainers(source).flatMap((row) => (row.name ? [row.name] : []))
 }
 
 function listedContainers(spec: { name?: string }[] | undefined, statuses: ContainerStatus[] | undefined): (ContainerStatus | undefined)[] {
@@ -115,6 +120,27 @@ function restartTotal(object: KubernetesObject): number {
     (sum, item) => sum + count(item.restartCount),
     0,
   )
+}
+
+function templateSpec(kindId: string, object: KubernetesObject): KubernetesObject["spec"] {
+  const path = kindId === "cronjobs" ? ["jobTemplate", "spec", "template", "spec"] : ["template", "spec"]
+  const nested = read(object.spec, ...path)
+  if (!nested || typeof nested !== "object" || Array.isArray(nested)) return undefined
+  const record = nested as Record<string, unknown>
+  return {
+    containers: containerSpecs(record.containers),
+    initContainers: containerSpecs(record.initContainers),
+    ephemeralContainers: containerSpecs(record.ephemeralContainers),
+  }
+}
+
+function containerSpecs(value: unknown): ContainerSpec[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return []
+    const name = "name" in item && typeof item.name === "string" ? item.name : ""
+    return [{ name }]
+  })
 }
 
 function podPhase(object: KubernetesObject): Cell {

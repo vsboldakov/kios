@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test"
-import { lookupResource, readWatchChunk, scopePath, withContext } from "./kubectl"
+import type { ResourceKind } from "../resources"
+import { logArgs, lookupResource, readWatchChunk, scopePath, withContext } from "./kubectl"
 
 const table = `
 pods po v1 true Pod get,list,watch
@@ -59,4 +60,10 @@ test("a versioned custom resource name watches that row", () => {
     path: "/apis/snapshot.storage.k8s.io/v1/volumesnapshots",
     watchable: true,
   })
+})
+
+test("logs one container or every container", () => {
+  const pods: ResourceKind = { id: "pods", label: "Pods", resource: "pods", namespaced: true, group: 0, columns: [] }
+  expect(logArgs(pods, "api", "default", false)).toEqual(["logs", "--tail=500", "--all-containers", "--prefix", "-n", "default", "pods/api"])
+  expect(logArgs(pods, "api", "default", true, true, "app")).toEqual(["logs", "-f", "--previous", "--tail=500", "-c", "app", "--prefix", "-n", "default", "pods/api"])
 })

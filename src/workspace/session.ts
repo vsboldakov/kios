@@ -15,6 +15,8 @@ export interface Detail {
   tab: DetailTab
   logs: boolean
   follow: boolean
+  previous: boolean
+  container: string
 }
 
 export interface LogTarget {
@@ -38,7 +40,7 @@ export interface ContainerScope {
 export interface WorkspaceTab {
   id: string
   kindId: string
-  resource: { name: string; namespace: string; format: DetailTab; logs: boolean; follow: boolean } | null
+  resource: { name: string; namespace: string; format: DetailTab; logs: boolean; follow: boolean; previous: boolean; container: string } | null
   owner: OwnerScope | null
   containers: ContainerScope | null
   filter: string
@@ -82,8 +84,10 @@ export interface Session {
   selectRow: (id: string, index: number) => void
   detail: () => Detail | null
   openDetail: (kindId: string, name: string, namespace: string) => void
-  openLogs: (kindId: string, name: string, namespace: string) => void
+  openLogs: (kindId: string, name: string, namespace: string, container?: string) => void
+  cycleLogContainer: (delta: number, names: readonly string[]) => void
   toggleFollow: () => void
+  togglePrevious: () => void
   logTarget: (items: readonly { metadata?: { name?: string; namespace?: string } }[]) => LogTarget | null
   closeDetail: () => void
   cycleDetail: (delta: number) => void
@@ -341,24 +345,40 @@ export function createSession(initial: readonly { id: string }[]): Session {
 
   function openDetail(kindId: string, name: string, namespace: string) {
     setPick(null)
-    patchActive((tab) => ({ ...tab, kindId, resource: { name, namespace, format: "describe", logs: false, follow: false } }))
+    patchActive((tab) => ({ ...tab, kindId, resource: { name, namespace, format: "describe", logs: false, follow: false, previous: false, container: "" } }))
     setFocus("detail")
     focusKind(kindId)
   }
 
-  function openLogs(kindId: string, name: string, namespace: string) {
+  function openLogs(kindId: string, name: string, namespace: string, container = "") {
     setPick(null)
     patchActive((tab) => ({
       ...tab,
       kindId,
-      resource: { name, namespace, format: tab.resource?.format ?? "describe", logs: true, follow: false },
+      resource: { name, namespace, format: tab.resource?.format ?? "describe", logs: true, follow: false, previous: false, container },
     }))
     setFocus("detail")
     focusKind(kindId)
   }
 
+  function cycleLogContainer(delta: number, names: readonly string[]) {
+    patchActive((tab) => {
+      const resource = tab.resource
+      if (!resource?.logs) return tab
+      const slots = ["", ...names]
+      const index = Math.max(0, slots.indexOf(resource.container))
+      const container = slots[(index + delta + slots.length) % slots.length] ?? ""
+      if (container === resource.container) return tab
+      return { ...tab, resource: { ...resource, container } }
+    })
+  }
+
   function toggleFollow() {
-    patchActive((tab) => (tab.resource?.logs ? { ...tab, resource: { ...tab.resource, follow: !tab.resource.follow } } : tab))
+    patchActive((tab) => (tab.resource?.logs ? { ...tab, resource: { ...tab.resource, follow: !tab.resource.follow, previous: false } } : tab))
+  }
+
+  function togglePrevious() {
+    patchActive((tab) => (tab.resource?.logs ? { ...tab, resource: { ...tab.resource, previous: !tab.resource.previous, follow: false } } : tab))
   }
 
   function logTarget(items: readonly { metadata?: { name?: string; namespace?: string } }[]): LogTarget | null {
@@ -437,6 +457,8 @@ export function createSession(initial: readonly { id: string }[]): Session {
       tab: tab.resource.format,
       logs: tab.resource.logs,
       follow: tab.resource.follow,
+      previous: tab.resource.previous,
+      container: tab.resource.container,
     }
   }
 
@@ -480,7 +502,9 @@ export function createSession(initial: readonly { id: string }[]): Session {
     detail,
     openDetail,
     openLogs,
+    cycleLogContainer,
     toggleFollow,
+    togglePrevious,
     logTarget,
     closeDetail,
     cycleDetail,

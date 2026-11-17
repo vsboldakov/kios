@@ -37,10 +37,25 @@ test("keeps work in the current tab until a new tab is opened", () => {
     session.cycleDetail(1)
     expect(session.detail()?.tab).toBe("yaml")
     expect(session.logTarget([])).toEqual({ kindId: "daemonsets", name: "logger", namespace: "default" })
+    session.togglePrevious()
+    expect(session.detail()?.previous).toBe(false)
     session.openLogs("daemonsets", "logger", "default")
     expect(session.tabs()).toHaveLength(1)
     expect(session.detail()?.logs).toBe(true)
+    expect(session.detail()?.container).toBe("")
     expect(session.detail()?.follow).toBe(false)
+    expect(session.detail()?.previous).toBe(false)
+    session.togglePrevious()
+    expect(session.detail()?.previous).toBe(true)
+    expect(session.detail()?.follow).toBe(false)
+    session.toggleFollow()
+    expect(session.detail()?.follow).toBe(true)
+    expect(session.detail()?.previous).toBe(false)
+    session.togglePrevious()
+    expect(session.detail()?.previous).toBe(true)
+    expect(session.detail()?.follow).toBe(false)
+    session.togglePrevious()
+    expect(session.detail()?.previous).toBe(false)
     session.toggleFollow()
     expect(session.detail()?.follow).toBe(true)
     session.toggleFollow()
@@ -58,6 +73,37 @@ test("keeps work in the current tab until a new tab is opened", () => {
     session.setFocus("sidebar")
     expect(session.logTarget([{ metadata: { name: "logger", namespace: "default" } }])).toBeNull()
     expect(session.activeId()).toBe("daemonsets")
+  })
+})
+
+test("cycles log containers and keeps follow on the selected one", () => {
+  withSession((session) => {
+    session.openLogs("daemonsets", "logger", "default", "app")
+    expect(session.detail()?.container).toBe("app")
+    session.openDetail("daemonsets", "logger", "default")
+    expect(session.detail()?.logs).toBe(false)
+    expect(session.detail()?.container).toBe("")
+    session.openLogs("daemonsets", "logger", "default")
+    expect(session.detail()?.container).toBe("")
+    session.cycleLogContainer(1, ["app", "sidecar"])
+    expect(session.detail()?.container).toBe("app")
+    session.cycleLogContainer(1, ["app", "sidecar"])
+    expect(session.detail()?.container).toBe("sidecar")
+    session.cycleLogContainer(1, ["app", "sidecar"])
+    expect(session.detail()?.container).toBe("")
+    session.cycleLogContainer(-1, ["app", "sidecar"])
+    expect(session.detail()?.container).toBe("sidecar")
+    session.toggleFollow()
+    expect(session.detail()?.follow).toBe(true)
+    expect(session.detail()?.previous).toBe(false)
+    expect(session.detail()?.container).toBe("sidecar")
+    session.togglePrevious()
+    expect(session.detail()?.previous).toBe(true)
+    expect(session.detail()?.follow).toBe(false)
+    expect(session.detail()?.container).toBe("sidecar")
+    session.openLogs("daemonsets", "logger", "default", "gone")
+    session.cycleLogContainer(1, ["app", "sidecar"])
+    expect(session.detail()?.container).toBe("app")
   })
 })
 
@@ -229,9 +275,11 @@ test("routes keys to the focused zone", () => {
     let ownerMoves = 0
     let controlledMoves = 0
     let follows = 0
+    let previous = 0
     let filters = 0
     let details = 0
     let copies = 0
+    let logContainers = 0
     const actions = {
       focus: session.focus,
       toggleFocus: () => session.setFocus(session.focus() === "sidebar" ? "list" : "sidebar"),
@@ -265,8 +313,14 @@ test("routes keys to the focused zone", () => {
       scrollDetail: () => {},
       openNewTab: () => {},
       openLogs: () => {},
+      cycleLogContainer: () => {
+        logContainers += 1
+      },
       toggleFollow: () => {
         follows += 1
+      },
+      togglePrevious: () => {
+        previous += 1
       },
       startFilter: () => {
         filters += 1
@@ -304,6 +358,7 @@ test("routes keys to the focused zone", () => {
     expect(session.detail()?.tab).toBe("json")
     runKey({ name: "right" }, actions)
     expect(session.detail()?.tab).toBe("describe")
+    expect(logContainers).toBe(0)
     expect(ownerMoves).toBe(1)
     expect(controlledMoves).toBe(1)
     expect(session.focus()).toBe("detail")
@@ -323,15 +378,19 @@ test("routes keys to the focused zone", () => {
     expect(session.activeId()).toBe("daemonsets")
     expect(session.focus()).toBe("detail")
     session.openLogs("daemonsets", "logger", "default")
+    runKey({ name: "p" }, actions)
+    expect(previous).toBe(1)
     runKey({ name: "d" }, actions)
     expect(details).toBe(1)
     runKey({ name: "d", ctrl: true }, actions)
     expect(details).toBe(1)
     runKey({ name: "left" }, actions)
     runKey({ name: "right" }, actions)
+    expect(logContainers).toBe(2)
     expect(ownerMoves).toBe(1)
     expect(controlledMoves).toBe(1)
     expect(session.detail()?.logs).toBe(true)
+    expect(session.detail()?.tab).toBe("describe")
     runKey({ name: "c" }, actions)
     expect(copies).toBe(2)
     runKey({ name: "tab" }, actions)

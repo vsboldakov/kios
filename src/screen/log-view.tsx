@@ -1,7 +1,7 @@
 import type { ScrollBoxRenderable } from "@opentui/core"
 import { For, createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 import { useCluster, useSession } from "../context"
-import { findKind } from "../resources"
+import { findKind, logContainerNames } from "../resources"
 import { bindDetailContent } from "./detail-content"
 import { theme } from "./theme"
 import { bindDetailScroll, stickDetailScroll } from "./detail-scroll"
@@ -18,21 +18,30 @@ export function LogView(props: { kindId: string; name: string; namespace: string
   const releaseDetail = bindDetailContent(() => text())
   onCleanup(releaseDetail)
   const live = () => session.detail()?.follow ?? false
+  const previous = () => session.detail()?.previous ?? false
+  const container = () => {
+    const selected = session.detail()?.container ?? ""
+    if (!selected) return ""
+    const object = cluster.snapshot(props.kindId).items.find((item) => item.metadata?.name === props.name && (item.metadata?.namespace ?? "") === props.namespace)
+    return object && logContainerNames(props.kindId, object).includes(selected) ? selected : ""
+  }
 
   createEffect(() => {
     const kind = findKind(props.kindId, cluster.extraKinds())
     const name = props.name
     const namespace = props.namespace
     const follow = live()
+    const showPrevious = previous()
+    const selected = container()
     if (!kind) return
     let stale = false
     let stop = () => {}
     setText(null)
     if (follow) stop = cluster.followLogs(kind, name, namespace, (next) => {
       if (!stale) setText(next)
-    })
+    }, selected)
     else {
-      void cluster.logs(kind, name, namespace).then((next) => {
+      void cluster.logs(kind, name, namespace, showPrevious, selected).then((next) => {
         if (!stale) setText(next)
       })
     }

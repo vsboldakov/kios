@@ -29,7 +29,9 @@ export interface WorkspaceActions {
   scrollDetail: (delta: number) => void
   openNewTab: () => void
   openLogs: () => void
+  cycleLogContainer: (delta: number) => void
   toggleFollow: () => void
+  togglePrevious: () => void
   startFilter: () => void
   copyDetail: () => void
 }
@@ -86,6 +88,11 @@ export function runKey(key: KeyCommand, actions: WorkspaceActions): void {
     return
   }
 
+  if (key.name === "p") {
+    actions.togglePrevious()
+    return
+  }
+
   if (key.name === "tab") {
     actions.toggleFocus()
     return
@@ -97,6 +104,8 @@ export function runKey(key: KeyCommand, actions: WorkspaceActions): void {
     if (up.has(key.name)) actions.scrollDetail(-1)
     if (actions.formatView() && key.name === "left") actions.cycleDetail(-1)
     if (actions.formatView() && key.name === "right") actions.cycleDetail(1)
+    if (!actions.formatView() && key.name === "left") actions.cycleLogContainer(-1)
+    if (!actions.formatView() && key.name === "right") actions.cycleLogContainer(1)
     if (close.has(key.name) || key.name === "escape") actions.closeDetail()
     return
   }

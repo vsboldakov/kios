@@ -372,8 +372,8 @@ test("shows logs for a selected workload and hides the hint otherwise", async ()
     async inspect() {
       return { describe: "", yaml: "", json: "" }
     },
-    async logs(_kind: ResourceKind, name: string) {
-      return `LOG ${name}`
+    async logs(_kind: ResourceKind, name: string, _namespace: string, previous?: boolean) {
+      return previous ? `PREV ${name}` : `LOG ${name}`
     },
     followLogs(_kind: ResourceKind, name: string, _namespace: string, onText: (text: string) => void) {
       onText(`FOLLOW ${name}`)
@@ -400,6 +400,16 @@ test("shows logs for a selected workload and hides the hint otherwise", async ()
     expect(followed).toContain("f following")
     setup.mockInput.pressKey("f")
     await setup.waitForFrame((frame) => frame.includes("LOG api") && frame.includes("f follow"))
+    setup.mockInput.pressKey("p")
+    const previous = await setup.waitForFrame((frame) => frame.includes("PREV api"))
+    expect(previous).toContain("default/api previous")
+    expect(previous).toContain("p current")
+    setup.mockInput.pressKey("f")
+    const followedAgain = await setup.waitForFrame((frame) => frame.includes("FOLLOW api"))
+    expect(followedAgain).toContain("f following")
+    expect(followedAgain).not.toContain("PREV api")
+    setup.mockInput.pressKey("f")
+    await setup.waitForFrame((frame) => frame.includes("LOG api") && frame.includes("p previous"))
     setup.mockInput.pressBackspace()
     await setup.waitForFrame((frame) => frame.includes("default/api") && !frame.includes("LOG api"))
     setup.mockInput.pressTab()
@@ -410,6 +420,61 @@ test("shows logs for a selected workload and hides the hint otherwise", async ()
     setup.mockInput.pressKey("l")
     await setup.waitForVisualIdle()
     expect(setup.captureCharFrame()).not.toContain("LOG api")
+  } finally {
+    await setup.dispose()
+  }
+})
+
+test("switches between one container and every container", async () => {
+  const pod: KubernetesObject = {
+    metadata: {
+      uid: "default/api",
+      name: "api",
+      namespace: "default",
+      creationTimestamp: new Date(Date.now() - 3_600_000).toISOString(),
+    },
+    spec: { containers: [{ name: "app" }, { name: "sidecar" }] },
+    status: { phase: "Running" },
+  }
+  const logged: ClusterClient = {
+    async currentContext() {
+      return "demo"
+    },
+    async namespaces() {
+      return ["default"]
+    },
+    async list(kind: ResourceKind) {
+      if (kind.id === "pods") return [pod]
+      return []
+    },
+    async inspect() {
+      return { describe: "", yaml: "", json: "" }
+    },
+    async logs(_kind: ResourceKind, _name: string, _namespace: string, _previous?: boolean, container?: string) {
+      return container ? `LOG ${container}` : "LOG all"
+    },
+    followLogs() {
+      return () => {}
+    },
+    async execute() {},
+  }
+  const setup = await testRender(() => <App client={logged} />, { width: 112, height: 28 })
+  try {
+    await setup.waitForFrame((frame) => frame.includes("Nodes"))
+    setup.mockInput.pressTab()
+    setup.mockInput.pressArrow("down")
+    setup.mockInput.pressEnter()
+    await setup.waitForFrame((frame) => frame.includes("default/api"))
+    setup.mockInput.pressKey("l")
+    const logs = await setup.waitForFrame((frame) => frame.includes("LOG all"))
+    expect(logs).toContain("← → container")
+    expect(logs).not.toContain("default/api/app")
+    setup.mockInput.pressArrow("right")
+    const app = await setup.waitForFrame((frame) => frame.includes("LOG app"))
+    expect(app).toContain("default/api/app")
+    setup.mockInput.pressArrow("left")
+    const all = await setup.waitForFrame((frame) => frame.includes("LOG all") && !frame.includes("LOG app"))
+    expect(all).not.toContain("default/api/app")
   } finally {
     await setup.dispose()
   }

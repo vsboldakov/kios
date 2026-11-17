@@ -21,7 +21,7 @@ import { useCluster, useSession } from "./context"
 import { createEditMode } from "./workspace/edit"
 import { rowAfterFilter } from "./workspace/filter"
 import { runKey } from "./workspace/input"
-import { controlledKind, controllerOf, findKind, formatAge, kindIdFor, kubernetesKind } from "./resources"
+import { controlledKind, controllerOf, findKind, formatAge, kindIdFor, kubernetesKind, logContainerNames } from "./resources"
 import { containerColumns } from "./workspace/containers"
 import { currentTarget, listedItems, nextVisibleIndex, rowAt, visibleRows } from "./workspace/selection"
 import { columnLetters } from "./workspace/sort"
@@ -309,6 +309,11 @@ export function Shell() {
         return Boolean(current && !current.logs)
       },
       cycleDetail: session.cycleDetail,
+      cycleLogContainer: (delta) => {
+        const target = currentTarget(session, cluster)
+        if (!target) return
+        session.cycleLogContainer(delta, logContainerNames(target.kindId, target.object))
+      },
       scrollDetail,
       openNewTab: session.newTab,
       copyDetail: () => {
@@ -320,7 +325,8 @@ export function Shell() {
       openLogs: () => {
         const visible = visibleRows(session, cluster)
         if (visible?.type === "containers" && session.focus() === "list") {
-          session.openLogs("pods", visible.scope.name, visible.scope.namespace)
+          const selected = rowAt(visible.shown, session.containerIndex())
+          session.openLogs("pods", visible.scope.name, visible.scope.namespace, selected?.name)
           return
         }
         const rows = visible?.type === "resources" ? visible.shown : []
@@ -328,6 +334,7 @@ export function Shell() {
         if (target) session.openLogs(target.kindId, target.name, target.namespace)
       },
       toggleFollow: session.toggleFollow,
+      togglePrevious: session.togglePrevious,
       startFilter: () => setFiltering(true),
     })
   })

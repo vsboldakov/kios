@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { columnWidth, controlledKind, controllerOf, findKind, fitParts, formatAge, kindIdFor, menuKinds, ownedItems, podContainers, resourceKinds, sidebarKinds, sidebarLabel, type KubernetesObject } from "."
+import { columnWidth, controlledKind, controllerOf, findKind, fitParts, formatAge, kindIdFor, logContainerNames, menuKinds, ownedItems, podContainers, resourceKinds, sidebarKinds, sidebarLabel, type KubernetesObject } from "."
 
 test("abbreviates sidebar kinds of more than two words", () => {
   expect(sidebarLabel("NetworkPolicies")).toBe("NetworkPolicies")
@@ -235,6 +235,23 @@ test("lists containers for a pod without adding a sidebar kind", () => {
   expect(rows[2]).toMatchObject({ status: "Running", tone: "ready", restarts: 2, cpu: "10m/-", memory: "-/32Mi" })
   expect(rows[3]).toMatchObject({ status: "Error", tone: "progress", restarts: 0, image: "busybox:debug" })
   expect(podContainers({})).toEqual([])
+})
+
+test("names containers for a pod, a workload, and a cronjob", () => {
+  expect(logContainerNames("pods", {
+    spec: {
+      containers: [{ name: "" }, { name: "app" }],
+      initContainers: [{ name: "init" }],
+      ephemeralContainers: [{ name: "debug" }],
+    },
+  })).toEqual(["app", "init", "debug"])
+  expect(logContainerNames("deployments", {
+    spec: { template: { spec: { containers: [{ name: "app" }], initContainers: [{ name: "init" }] } } },
+  } as KubernetesObject)).toEqual(["app", "init"])
+  expect(logContainerNames("cronjobs", {
+    spec: { jobTemplate: { spec: { template: { spec: { containers: [{ name: "job" }], ephemeralContainers: [{ name: "debug" }] } } } } },
+  } as KubernetesObject)).toEqual(["job", "debug"])
+  expect(logContainerNames("deployments", {})).toEqual([])
 })
 
 test("follows the controller and the resources it owns", () => {
