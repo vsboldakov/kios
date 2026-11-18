@@ -1,7 +1,26 @@
 {
   "name": "@vsboldakov/kios",
   "version": "0.4.0",
-  "description": "Terminal UI for Kubernetes workloads",
+  "description": "Kubernetes TUI: a k8s terminal UI for kubectl to browse clusters, logs, exec and port-forward",
+  "keywords": [
+    "kubernetes",
+    "k8s",
+    "kubectl",
+    "tui",
+    "terminal-ui",
+    "kubernetes-ui",
+    "k8s-ui",
+    "kubernetes-dashboard",
+    "k9s-alternative",
+    "lens-alternative",
+    "devops",
+    "cli"
+  ],
+  "homepage": "https://github.com/vsboldakov/kios",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vsboldakov/kios.git"
+  },
   "type": "module",
   "license": "MIT",
   "publishConfig": {
