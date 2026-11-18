@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0
+
+### Features
+- readme
+
 ## 0.4.0
 
 ### Features
