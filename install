@@ -151,9 +151,13 @@ tar -xzf "$tmp/kios.tgz" -C "$tmp"
 rm -rf "$LIB_DIR"
 mkdir -p "$(dirname "$LIB_DIR")" "$INSTALL_DIR"
 mv "$tmp/package" "$LIB_DIR"
+# Bun loads bunfig.toml from the cwd and otherwise compiles this JSX as React.
+if [[ ! -f "$LIB_DIR/bunfig.toml" ]]; then
+  printf '%s\n' 'preload = ["@opentui/solid/preload"]' > "$LIB_DIR/bunfig.toml"
+fi
 cat > "$INSTALL_DIR/kios" <<EOF
 #!/bin/sh
-exec $(printf '%q' "$bun_bin") $(printf '%q' "$LIB_DIR/src/index.tsx") "\$@"
+exec $(printf '%q' "$bun_bin") --config=$(printf '%q' "$LIB_DIR/bunfig.toml") $(printf '%q' "$LIB_DIR/src/index.tsx") "\$@"
 EOF
 chmod 755 "$INSTALL_DIR/kios"
 

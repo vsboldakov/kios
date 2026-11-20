@@ -27,10 +27,12 @@
     "access": "public"
   },
   "bin": {
-    "kios": "src/index.tsx"
+    "kios": "bin/kios"
   },
   "files": [
+    "bin",
     "src",
+    "bunfig.toml",
     "tsconfig.json",
     "!src/**/*.test.ts",
     "!src/**/*.test.tsx"
