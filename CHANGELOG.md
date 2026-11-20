@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1
+
+### Fixes
+- install script
+- install script
+
 ## 0.5.0
 
 ### Features
