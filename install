@@ -151,13 +151,21 @@ tar -xzf "$tmp/kios.tgz" -C "$tmp"
 rm -rf "$LIB_DIR"
 mkdir -p "$(dirname "$LIB_DIR")" "$INSTALL_DIR"
 mv "$tmp/package" "$LIB_DIR"
-# Bun loads bunfig.toml from the cwd and otherwise compiles this JSX as React.
-if [[ ! -f "$LIB_DIR/bunfig.toml" ]]; then
-  printf '%s\n' 'preload = ["@opentui/solid/preload"]' > "$LIB_DIR/bunfig.toml"
-fi
+# Same launcher as bin/kios.js. Published versions through 0.5.0 do not ship bin/.
+cat > "$LIB_DIR/kios-bunfig.toml" <<'EOF'
+# Overrides a bunfig.toml in the current directory.
+EOF
+cat > "$LIB_DIR/kios-launch.js" <<'EOF'
+// Bun resolves a bunfig preload from the cwd, so import the plugin from this package.
+// Dynamic import: index.tsx is JSX and must compile after the plugin is registered.
+import "@opentui/solid/preload"
+import "./src/solid-client.ts"
+
+await import("./src/index.tsx")
+EOF
 cat > "$INSTALL_DIR/kios" <<EOF
 #!/bin/sh
-exec $(printf '%q' "$bun_bin") --config=$(printf '%q' "$LIB_DIR/bunfig.toml") $(printf '%q' "$LIB_DIR/src/index.tsx") "\$@"
+exec $(printf '%q' "$bun_bin") --no-install --config=$(printf '%q' "$LIB_DIR/kios-bunfig.toml") $(printf '%q' "$LIB_DIR/kios-launch.js") "\$@"
 EOF
 chmod 755 "$INSTALL_DIR/kios"
 

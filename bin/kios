@@ -21,4 +21,5 @@ else
   exit 1
 fi
 
-exec "$bun_bin" --config="$root/bunfig.toml" "$root/src/index.tsx" "$@"
+# --no-install: a missing dependency fails here instead of downloading into the global cache.
+exec "$bun_bin" --no-install --config="$root/bin/runtime.toml" "$root/bin/kios.js" "$@"
