@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.0
+
+### Features
+- exit early if kubectl not found
+
 ## 0.6.0
 
 ### Features
