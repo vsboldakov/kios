@@ -11,7 +11,7 @@ test("lists a ctrl key for each edit action", () => {
   expect(editActions("pods").find((action) => action.id === "force")?.key).toBe("f")
   expect(editActions("pods").find((action) => action.id === "edit")?.key).toBe("e")
   expect(editActions("services").map((action) => action.id)).toEqual(["delete", "port-forward", "edit"])
-  expect(editActions("deployments").map((action) => action.id)).toEqual(["delete", "restart", "undo", "edit"])
+  expect(editActions("deployments").map((action) => action.id)).toEqual(["delete", "restart", "undo", "scale", "edit"])
   expect(editActions("statefulsets").map((action) => action.id)).toEqual(["delete", "restart", "undo", "edit"])
   expect(editActions("daemonsets").map((action) => action.id)).toEqual(["delete", "restart", "undo", "edit"])
   expect(editActions("replicasets").map((action) => action.id)).toEqual(["delete", "scale", "edit"])
@@ -68,6 +68,13 @@ test("builds the kubectl commands", () => {
   expect(editCommand("jobs", "resume", target)?.args.at(-1)).toContain(`"suspend":false`)
   expect(editCommand("replicasets", "scale", { ...target, replicas: 3 })?.args).toContain("--replicas=3")
   expect(editCommand("replicasets", "scale", target)).toBeNull()
+  expect(editCommand("deployments", "scale", { ...target, replicas: 3 })?.args).toEqual([
+    "scale",
+    "deployments/api",
+    "--replicas=3",
+    "-n",
+    "default",
+  ])
   expect(editCommand("cronjobs", "trigger", target, 36)?.args[3]).toBe("api-manual-10")
   expect(editCommand("cronjobs", "suspend", target)?.args.at(-1)).toContain(`"suspend":true`)
   expect(editCommand("cronjobs", "resume", target)?.args.at(-1)).toContain(`"suspend":false`)

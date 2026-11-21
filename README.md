@@ -44,7 +44,7 @@ kios is a free, open-source TUI for managing Kubernetes. It wraps kubectl in a c
 - **Workload actions**: restart, roll back, scale, delete, evict, edit YAML, trigger and suspend CronJobs, cordon, uncordon and drain nodes
 - **Describe, YAML and JSON** views for every resource
 - **Fast navigation**: slash command palette with kubectl short names (`po`, `deploy`, `svc`, `ns`), fuzzy search, filters and sorting
-- **Namespaces and contexts**: switch namespaces, or pick any kubeconfig context
+- **Namespaces**: switch and filter namespaces
 - **CRD support** for Argo CD, Flux, cert-manager, Istio, Linkerd, Cilium, Karpenter, KEDA, Kyverno, Prometheus Operator, Velero and VolumeSnapshots
 
 ### kios vs k9s, Lens and the Kubernetes Dashboard

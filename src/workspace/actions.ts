@@ -34,7 +34,15 @@ function kindActions(kindId: string, suspended: boolean, extra: readonly Resourc
     ]
   }
   if (kindId === "services") return [deleteAction, { key: "p", label: "Port-forward", id: "port-forward" }]
-  if (kindId === "deployments" || kindId === "statefulsets" || kindId === "daemonsets") {
+  if (kindId === "deployments") {
+    return [
+      deleteAction,
+      { key: "r", label: "Restart", id: "restart" },
+      { key: "u", label: "Undo", id: "undo" },
+      { key: "s", label: "Scale", id: "scale" },
+    ]
+  }
+  if (kindId === "statefulsets" || kindId === "daemonsets") {
     return [deleteAction, { key: "r", label: "Restart", id: "restart" }, { key: "u", label: "Undo", id: "undo" }]
   }
   if (kindId === "replicasets") return [deleteAction, { key: "s", label: "Scale", id: "scale" }]
