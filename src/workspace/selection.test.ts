@@ -19,6 +19,8 @@ function cluster(items: KubernetesObject[]): Cluster {
     syncWatches: () => {},
     refresh: async () => {},
     refreshNamespaces: async () => {},
+    namespacesReady: () => true,
+    kindsReady: () => true,
     inspect: async () => ({ describe: "", yaml: "", json: "" }),
     logs: async () => "",
     followLogs: () => () => {},

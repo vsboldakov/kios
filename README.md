@@ -28,7 +28,7 @@ kios --context prod -n payments
 
 ### About
 
-kios is a free, open-source TUI for managing Kubernetes. It wraps kubectl in a clear, navigable interface, so you get a far better view of your cluster than plain kubectl output, without the learning curve of k9s. It runs right in your terminal (no browser or desktop app), and the only requirement is the kubectl binary.
+kios is a free, open-source TUI for managing Kubernetes. It wraps kubectl in a clear, navigable interface, so you get a far better view of your cluster than plain kubectl output, without the learning curve of k9s. If k9s is vim, kios is nano. It runs right in your terminal (no browser or desktop app), and the only requirement is the kubectl binary.
 
 - Open and free, unlike OpenLens
 - Simpler and more user-friendly than k9s

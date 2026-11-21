@@ -57,6 +57,8 @@ export interface Cluster {
   syncWatches: (kindIds: readonly string[]) => void
   refresh: (kind: ResourceKind) => Promise<void>
   refreshNamespaces: () => Promise<void>
+  namespacesReady: () => boolean
+  kindsReady: () => boolean
   inspect: (kind: ResourceKind, name: string, namespace: string) => Promise<ObjectView>
   logs: (kind: ResourceKind, name: string, namespace: string, previous?: boolean, container?: string) => Promise<string>
   followLogs: (kind: ResourceKind, name: string, namespace: string, onText: (text: string) => void, container?: string) => () => void
@@ -89,7 +91,9 @@ export function createCluster(client: ClusterClient, initialNamespace = ""): Clu
   const [contextName, setContextName] = createSignal(launchContext || "…")
   const [namespaces, setNamespaces] = createSignal<string[]>([])
   const [namespace, setNamespace] = createSignal(openedNamespace)
+  const [namespacesReady, setNamespacesReady] = createSignal(false)
   const [extraKinds, setExtraKinds] = createSignal<readonly ResourceKind[]>([])
+  const [kindsReady, setKindsReady] = createSignal(!client.resources)
   // Context, namespaces, and discovery wait so the first list is the only kubectl until the rows are up.
   let listed = false
   const now = createPolled(() => Date.now(), 5000)
@@ -99,9 +103,12 @@ export function createCluster(client: ClusterClient, initialNamespace = ""): Clu
     listed = true
     if (!launchContext) void client.currentContext().then(setContextName).catch(() => setContextName("unavailable"))
     if (client.resources) {
-      void client.resources().then(setExtraKinds).catch(() => {
-        // Sidebar kinds still open when discovery cannot read the API.
-      })
+      void client.resources()
+        .then(setExtraKinds)
+        .catch(() => {
+          // Sidebar kinds still open when discovery cannot read the API.
+        })
+        .finally(() => setKindsReady(true))
     }
     void refreshNamespaces()
   }
@@ -121,6 +128,7 @@ export function createCluster(client: ClusterClient, initialNamespace = ""): Clu
       if (error instanceof ClientError && error.kind === "forbidden") await lockNamespace()
     } finally {
       namespacesPending = false
+      setNamespacesReady(true)
     }
   }
 
@@ -233,6 +241,8 @@ export function createCluster(client: ClusterClient, initialNamespace = ""): Clu
     syncWatches,
     refresh,
     refreshNamespaces,
+    namespacesReady,
+    kindsReady,
     inspect: (kind, name, namespace) => client.inspect(kind, name, namespace),
     logs: (kind, name, namespace, previous, container) => client.logs(kind, name, namespace, previous, container),
     followLogs: (kind, name, namespace, onText, container) => client.followLogs(kind, name, namespace, onText, container),

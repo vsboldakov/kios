@@ -1135,6 +1135,54 @@ test("opens the three views and reconciles a flux resource", async () => {
   }
 })
 
+test("shows loaders while CRDs and namespaces are in flight", async () => {
+  let releaseNamespaces: ((names: string[]) => void) | undefined
+  let releaseKinds: ((kinds: ResourceKind[]) => void) | undefined
+  const pending: ClusterClient = {
+    async currentContext() {
+      return "demo"
+    },
+    namespaces() {
+      return new Promise((resolve) => {
+        releaseNamespaces = resolve
+      })
+    },
+    resources() {
+      return new Promise((resolve) => {
+        releaseKinds = resolve
+      })
+    },
+    async list() {
+      return [resource("api", 1, 1)]
+    },
+    async inspect() {
+      return { describe: "", yaml: "", json: "" }
+    },
+    async logs() {
+      return ""
+    },
+    followLogs() {
+      return () => {}
+    },
+    async execute() {},
+  }
+  const setup = await testRender(() => <App client={pending} />, { width: 112, height: 48 })
+  try {
+    const loading = await setup.waitForFrame((frame) => frame.includes("api") && frame.includes("CRDs") && frame.includes("Loading..."))
+    const lines = loading.split("\n")
+    const events = lines.findIndex((line) => line.includes("Events"))
+    const crds = lines.findIndex((line) => line.includes("CRDs"))
+    expect(crds).toBe(events + 2)
+    expect(loading).not.toContain("all namespaces")
+    releaseNamespaces?.(["kube-system", "default"])
+    releaseKinds?.([])
+    const loaded = await setup.waitForFrame((frame) => frame.includes("all namespaces") && frame.includes("kube-system") && !frame.includes("Loading..."))
+    expect(loaded).not.toContain("CRDs")
+  } finally {
+    await setup.dispose()
+  }
+})
+
 function locate(setup: Awaited<ReturnType<typeof testRender>>, text: string) {
   const lines = setup.captureCharFrame().split("\n")
   const y = lines.findIndex((line) => line.includes(text))

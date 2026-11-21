@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import { createEffect, createRoot } from "solid-js"
-import { findKind, type KubernetesObject } from "../resources"
+import { findKind, type KubernetesObject, type ResourceKind } from "../resources"
 import { ClientError, createCluster, type Cluster, type ClusterClient, type WatchEvent } from "./cluster"
 
 function pod(uid: string, name: string): KubernetesObject {
@@ -266,6 +266,49 @@ test("polls after a watch is forbidden", async () => {
     root.cluster.syncWatches([])
     root.dispose()
   }
+})
+
+test("keeps loaders up until CRDs and namespaces settle", async () => {
+  const idle = createCluster(stub({}))
+  expect(idle.kindsReady()).toBe(true)
+  expect(idle.namespacesReady()).toBe(false)
+
+  let releaseNamespaces: ((names: string[]) => void) | undefined
+  let releaseKinds: ((kinds: ResourceKind[]) => void) | undefined
+  const cluster = createCluster(stub({
+    namespaces() {
+      return new Promise((resolve) => {
+        releaseNamespaces = resolve
+      })
+    },
+    resources() {
+      return new Promise((resolve) => {
+        releaseKinds = resolve
+      })
+    },
+    async list() {
+      return [pod("1", "a")]
+    },
+  }))
+  const pods = findKind("pods")
+  if (!pods) throw new Error("missing pods")
+  expect(cluster.kindsReady()).toBe(false)
+  expect(cluster.namespacesReady()).toBe(false)
+  await cluster.refresh(pods)
+  expect(cluster.kindsReady()).toBe(false)
+  expect(cluster.namespacesReady()).toBe(false)
+  releaseNamespaces?.(["default"])
+  releaseKinds?.([])
+  await until(() => cluster.namespacesReady() && cluster.kindsReady() && cluster.namespaces().length === 1)
+  expect(cluster.namespaces()).toEqual(["default"])
+
+  const failed = createCluster(stub({
+    resources() {
+      return Promise.reject(new Error("nope"))
+    },
+  }))
+  await failed.refresh(pods)
+  await until(() => failed.kindsReady())
 })
 
 test("shows the launch context without asking kubectl", async () => {

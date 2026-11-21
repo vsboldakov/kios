@@ -1,8 +1,9 @@
 import type { ScrollBoxRenderable } from "@opentui/core"
-import { createEffect, createMemo } from "solid-js"
+import { Show, createEffect, createMemo } from "solid-js"
 import { useCluster, useSession } from "../context"
 import { nameMatches } from "../workspace/filter"
 import { Keyed } from "./keyed"
+import { Loader } from "./loader"
 import { ListFilter, MatchedText } from "./list-filter"
 import { fit } from "../resources"
 import { sidebarWidth, splitBorder, theme } from "./theme"
@@ -77,9 +78,18 @@ export function NamespaceList(props: {
         viewportOptions={{ backgroundColor: theme.panel }}
         verticalScrollbarOptions={{ paddingLeft: 1 }}
       >
-        <Keyed each={options()} by={(name) => name || "all"}>
-          {(name, index) => <NamespaceRow name={name()} index={index()} cursor={cursor()} />}
-        </Keyed>
+        <Show
+          when={cluster.namespacesReady()}
+          fallback={
+            <box height={1} paddingLeft={1} flexShrink={0}>
+              <Loader label="Loading..." />
+            </box>
+          }
+        >
+          <Keyed each={options()} by={(name) => name || "all"}>
+            {(name, index) => <NamespaceRow name={name()} index={index()} cursor={cursor()} />}
+          </Keyed>
+        </Show>
       </scrollbox>
     </box>
   )

@@ -2,6 +2,7 @@ import type { ScrollBoxRenderable } from "@opentui/core"
 import { Show, createEffect, createMemo } from "solid-js"
 import { useCluster, useSession } from "../context"
 import { Keyed } from "./keyed"
+import { Loader } from "./loader"
 import { findKind, sidebarLabel, type ResourceKind } from "../resources"
 import { kindSidebarWidth, splitBorder, theme } from "./theme"
 
@@ -30,11 +31,7 @@ export function Sidebar() {
       flexDirection="column"
       flexShrink={0}
     >
-      <box height={1} paddingLeft={2} flexShrink={0}>
-        <text fg={theme.primary} selectable={false}>
-          Kinds
-        </text>
-      </box>
+      <box height={1} flexShrink={0} backgroundColor={theme.panel} />
       <scrollbox
         ref={(value: ScrollBoxRenderable) => {
           scroller = value
@@ -57,6 +54,12 @@ export function Sidebar() {
             </box>
           )}
         </Keyed>
+        <Show when={!cluster.kindsReady()}>
+          <box height={1} backgroundColor={theme.panel} />
+          <box height={1} paddingLeft={1} flexShrink={0}>
+            <Loader label="CRDs" />
+          </box>
+        </Show>
       </scrollbox>
     </box>
   )

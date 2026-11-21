@@ -2,6 +2,7 @@ import { $ } from "bun"
 import { fileURLToPath } from "node:url"
 import { formula } from "./formula"
 import { changelog, latestVersion, notesFor, planRelease } from "./semver"
+import { packageArchive, sha256sums, sourceArchive } from "./sums"
 
 await main()
 
@@ -52,8 +53,8 @@ async function main() {
     await $`bun publish --tolerate-republish`
     console.log(`Published ${pkg.name}@${version}`)
   }
-  await updateFormula(repo, version, branch)
-  await updateGithubRelease(repo, version, planned?.notes)
+  const sourceSha = await updateFormula(repo, version, branch)
+  await updateGithubRelease(repo, pkg.name, version, planned?.notes, sourceSha)
 }
 
 async function writeRelease(version: string, notes: string) {
@@ -65,25 +66,70 @@ async function writeRelease(version: string, notes: string) {
 }
 
 async function updateFormula(repo: string, version: string, branch: string) {
-  const url = `https://github.com/${repo}/archive/refs/tags/v${version}.tar.gz`
+  const archive = sourceArchive(repo, version)
   const current = (await Bun.file("Formula/kios.rb").exists()) ? await Bun.file("Formula/kios.rb").text() : ""
-  if (current.includes(url)) return
-  const ruby = formula(repo, version, await archiveSha(url))
+  if (current.includes(archive.url)) return
+  const sha = await archiveSha(archive.url)
+  const ruby = formula(repo, version, sha)
   await $`mkdir -p Formula`
   await Bun.write("Formula/kios.rb", ruby)
   await commit(`chore(release): brew formula ${version}`, "Formula/kios.rb")
   await $`git push origin ${branch}`
   console.log(`Updated Homebrew formula for ${version}`)
+  return sha
 }
 
-async function updateGithubRelease(repo: string, version: string, plannedNotes: string | undefined) {
-  const existing = await $`gh release view v${version} --repo ${repo}`.quiet().nothrow()
-  if (existing.exitCode === 0) return
+async function updateGithubRelease(
+  repo: string,
+  packageName: string,
+  version: string,
+  plannedNotes: string | undefined,
+  sourceSha: string | undefined,
+) {
+  const release = await githubRelease(repo, version)
+  if (release?.assets.includes("SHA256SUMS") && release.body.includes("### Checksums")) return
+
   const notes = plannedNotes ?? notesFor((await Bun.file("CHANGELOG.md").exists()) ? await Bun.file("CHANGELOG.md").text() : "", version)
-  const path = `/tmp/kios-${version}-notes.md`
-  await Bun.write(path, `${notes}\n`)
-  await $`gh release create v${version} --repo ${repo} --title v${version} --notes-file ${path}`
-  console.log(`Created GitHub release v${version}`)
+  const source = sourceArchive(repo, version)
+  const pack = packageArchive(packageName, version)
+  const sums = sha256sums([
+    { file: source.file, sha256: sourceSha ?? (await archiveSha(source.url)) },
+    { file: pack.file, sha256: await archiveSha(pack.url) },
+  ])
+  const dir = `/tmp/kios-${version}`
+  const notesPath = `${dir}/notes.md`
+  const sumsPath = `${dir}/SHA256SUMS`
+  await $`mkdir -p ${dir}`
+  await Bun.write(notesPath, `${notes.trim()}\n\n### Checksums\n\n\`\`\`\n${sums.trim()}\n\`\`\`\n`)
+  await Bun.write(sumsPath, sums)
+  if (!release) {
+    await $`gh release create v${version} --repo ${repo} --title v${version} --notes-file ${notesPath} ${sumsPath}`
+    console.log(`Created GitHub release v${version}`)
+    return
+  }
+  await $`gh release edit v${version} --repo ${repo} --notes-file ${notesPath}`
+  if (!release.assets.includes("SHA256SUMS")) await $`gh release upload v${version} --repo ${repo} ${sumsPath}`
+  console.log(`Updated GitHub release v${version}`)
+}
+
+async function githubRelease(repo: string, version: string): Promise<{ assets: string[]; body: string } | null> {
+  const view = await $`gh release view v${version} --repo ${repo} --json assets,body`.quiet().nothrow()
+  if (view.exitCode !== 0) return null
+  return requireRelease(JSON.parse(view.stdout.toString()))
+}
+
+function requireRelease(value: unknown): { assets: string[]; body: string } {
+  if (typeof value !== "object" || value === null || !("assets" in value) || !Array.isArray(value.assets)) {
+    throw new Error("unexpected GitHub release")
+  }
+  const body = "body" in value ? value.body : ""
+  if (typeof body !== "string" && body !== null) throw new Error("unexpected GitHub release")
+  return {
+    body: body ?? "",
+    assets: value.assets.flatMap((asset) =>
+      typeof asset === "object" && asset !== null && "name" in asset && typeof asset.name === "string" ? [asset.name] : [],
+    ),
+  }
 }
 
 async function archiveSha(url: string): Promise<string> {
@@ -96,7 +142,7 @@ async function archiveSha(url: string): Promise<string> {
     }
     if (attempt < 6) await Bun.sleep(3000)
   }
-  throw new Error(`missing source archive ${url}`)
+  throw new Error(`missing archive ${url}`)
 }
 
 async function onNpm(name: string, version: string): Promise<boolean> {
