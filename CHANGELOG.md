@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.0
+
+### Features
+- allow to scale deployments
+
 ## 0.5.1
 
 ### Fixes
