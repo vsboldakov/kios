@@ -20,6 +20,13 @@ if ("error" in flags) {
   process.exit(1)
 }
 
+// Same binary kubectlBin() spawns. Fail before render() takes the terminal.
+const bin = process.env.KIOS_KUBECTL?.trim() || "kubectl"
+if (!Bun.which(bin)) {
+  console.error(missingExecutable(bin))
+  process.exit(1)
+}
+
 const { render } = await import("@opentui/solid")
 const { App } = await import("./app")
 const { createKubectlClient } = await import("./cluster/kubectl")
@@ -29,6 +36,15 @@ await render(() => <App client={createKubectlClient(flags.context)} namespace={f
   exitOnCtrlC: true,
   useKittyKeyboard: { events: true, allKeysAsEscapes: true },
 })
+
+function missingExecutable(bin: string): string {
+  try {
+    Bun.spawnSync([bin], { stdout: "ignore", stderr: "ignore" })
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error)
+  }
+  return `Executable not found in $PATH: "${bin}"`
+}
 
 function readFlags(argv: string[]) {
   try {
