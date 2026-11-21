@@ -1,8 +1,8 @@
 class Kios < Formula
   desc "Terminal UI for Kubernetes workloads"
   homepage "https://github.com/vsboldakov/kios"
-  url "https://github.com/vsboldakov/kios/archive/refs/tags/v0.7.0.tar.gz"
-  sha256 "41ea0f9b9f51aacbe8a2072407b20549064bf5d4a9706c94542d00da8c3d5420"
+  url "https://github.com/vsboldakov/kios/archive/refs/tags/v0.8.0.tar.gz"
+  sha256 "0bcbadf2e06759544314b40a8668f5a445afd9073dcca2a2a38d8a76eab58912"
   license "MIT"
 
   depends_on "bun"
