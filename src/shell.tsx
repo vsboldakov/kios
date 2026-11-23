@@ -27,7 +27,7 @@ import { currentTarget, listedItems, nextVisibleIndex, rowAt, visibleRows } from
 import { columnLetters } from "./workspace/sort"
 import { splitBorder, theme } from "./screen/theme"
 
-export function Shell() {
+export function Shell(props: { edit?: boolean }) {
   const session = useSession()
   const cluster = useCluster()
   const renderer = useRenderer()
@@ -83,6 +83,7 @@ export function Shell() {
   const edit = createEditMode({
     session,
     cluster,
+    fixed: props.edit,
     suspend: () => renderer.suspend(),
     resume: () => renderer.resume(),
   })
@@ -358,7 +359,9 @@ export function Shell() {
             {`  ${cluster.contextName()}`}
           </text>
         </box>
-        <EditToggle on={edit.editing()} onToggle={edit.toggle} />
+        <Show when={props.edit === undefined}>
+          <EditToggle on={edit.editing()} onToggle={edit.toggle} />
+        </Show>
       </box>
       <box flexGrow={1} flexDirection="row" minHeight={0} backgroundColor={theme.bg}>
         <Sidebar />
@@ -434,7 +437,7 @@ export function Shell() {
           onPrompt={edit.submitPrompt}
         />
       </Show>
-      <StatusBar filtering={filtering()} />
+      <StatusBar filtering={filtering()} toggleEdit={props.edit === undefined} />
       <SlashMenu
         register={(handle) => {
           slashKey = handle

@@ -22,9 +22,10 @@ brew tap vsboldakov/kios https://github.com/vsboldakov/kios && brew install kios
 ```bash
 kios
 kios --context prod -n payments
+kios --readonly
 ```
 
-`--context` chooses a kubeconfig context. `-n` or `--namespace` opens that namespace.
+`--context` chooses a kubeconfig context. `-n` or `--namespace` opens that namespace. `--readonly` keeps edit mode off and `--allowedit` keeps it on; either one removes the edit mode toggle.
 
 ### About
 

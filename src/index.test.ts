@@ -52,3 +52,9 @@ test("kios rejects a missing flag value and an extra argument", async () => {
   expect(extra.exitCode).not.toBe(0)
   expect(extra.stderr.toString()).toContain("payments")
 })
+
+test("kios rejects --readonly together with --allowedit", async () => {
+  const result = await $`bun src/index.tsx --readonly --allowedit`.nothrow()
+  expect(result.exitCode).not.toBe(0)
+  expect(result.stderr.toString()).toContain("cannot be used together")
+})

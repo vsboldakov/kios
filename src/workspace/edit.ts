@@ -9,15 +9,17 @@ import type { Session } from "./session"
 export function createEditMode({
   session,
   cluster,
+  fixed,
   suspend,
   resume,
 }: {
   session: Session
   cluster: Cluster
+  fixed?: boolean
   suspend: () => Promise<void>
   resume: () => Promise<void>
 }) {
-  const [editing, setEditing] = createSignal(false)
+  const [editing, setEditing] = createSignal(fixed ?? false)
   const [prompt, setPrompt] = createSignal<{ actionId: string; label: string; value: string; width: number } | null>(null)
   const [notice, setNotice] = createSignal("")
   const [busy, setBusy] = createSignal(false)
@@ -50,6 +52,7 @@ export function createEditMode({
   })
 
   const toggle = () => {
+    if (fixed !== undefined) return
     setEditing((value) => !value)
     setPrompt(null)
     setPending(null)
@@ -176,7 +179,7 @@ export function createEditMode({
       if (key.name === "escape") setPrompt(null)
       return true
     }
-    if (key.name === "e" && !key.ctrl && !key.meta && !key.super && !key.repeated) {
+    if (fixed === undefined && key.name === "e" && !key.ctrl && !key.meta && !key.super && !key.repeated) {
       toggle()
       return true
     }

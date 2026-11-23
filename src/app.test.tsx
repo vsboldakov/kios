@@ -675,6 +675,52 @@ test("toggles edit mode from the status and the e key", async () => {
   }
 })
 
+test("fixed edit mode hides the toggle and ignores the e key", async () => {
+  const calls: unknown[] = []
+  const nodes: ClusterClient = {
+    ...client,
+    async list(kind: ResourceKind) {
+      if (kind.id !== "nodes") return []
+      return [{ metadata: { name: "worker" }, status: { conditions: [{ type: "Ready", status: "True" }] } }]
+    },
+    async execute(command) {
+      calls.push(command)
+    },
+  }
+  const readonly = await testRender(() => <App client={nodes} edit={false} />, { width: 160, height: 28 })
+  try {
+    await readonly.waitForFrame((frame) => frame.includes("worker") && frame.includes("← parent"))
+    readonly.mockInput.pressKey("e")
+    readonly.mockInput.pressKey("o", { ctrl: true })
+    await Bun.sleep(80)
+    const frame = readonly.captureCharFrame()
+    expect(frame).not.toContain("edit mode")
+    expect(frame).not.toContain("e edit")
+    expect(frame).not.toContain("ctrl+o Cordon")
+    expect(frame).not.toContain("kubectl cordon worker")
+  } finally {
+    await readonly.dispose()
+  }
+
+  const allowed = await testRender(() => <App client={nodes} edit />, { width: 160, height: 28 })
+  try {
+    await allowed.waitForFrame((frame) => frame.includes("ctrl+o Cordon"))
+    allowed.mockInput.pressKey("e")
+    await Bun.sleep(80)
+    const frame = allowed.captureCharFrame()
+    expect(frame).not.toContain("edit mode")
+    expect(frame).not.toContain("e edit")
+    expect(frame).toContain("ctrl+o Cordon")
+    allowed.mockInput.pressKey("o", { ctrl: true })
+    await allowed.waitForFrame((frame) => frame.includes("kubectl cordon worker"))
+    allowed.mockInput.pressEnter()
+    await allowed.waitForFrame(() => calls.length > 0)
+    expect(calls[0]).toEqual(editCommand("nodes", "cordon", { name: "worker", namespace: "" }))
+  } finally {
+    await allowed.dispose()
+  }
+})
+
 test("shows edit actions above the status bar and runs ctrl+key", async () => {
   const calls: unknown[] = []
   const editing: ClusterClient = {

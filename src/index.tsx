@@ -3,10 +3,12 @@ import "@opentui/solid/preload"
 import "./solid-client"
 import arg from "arg"
 
-const usage = `Usage: kios [--context name] [-n namespace]
+const usage = `Usage: kios [--context name] [-n namespace] [--readonly | --allowedit]
 
   -c, --context <name>    kubeconfig context
   -n, --namespace <name>  namespace to open
+      --readonly          keep edit mode off
+      --allowedit         keep edit mode on
   -h, --help              show this help`
 
 const flags = readFlags(Bun.argv.slice(2))
@@ -32,7 +34,7 @@ const { App } = await import("./app")
 const { createKubectlClient } = await import("./cluster/kubectl")
 
 // shortcut: letters show only if the terminal reports shift itself, drop these flags when the renderer exposes that directly
-await render(() => <App client={createKubectlClient(flags.context)} namespace={flags.namespace} />, {
+await render(() => <App client={createKubectlClient(flags.context)} namespace={flags.namespace} edit={flags.edit} />, {
   exitOnCtrlC: true,
   useKittyKeyboard: { events: true, allKeysAsEscapes: true },
 })
@@ -53,6 +55,8 @@ function readFlags(argv: string[]) {
         "--help": Boolean,
         "--context": requiredValue,
         "--namespace": requiredValue,
+        "--readonly": Boolean,
+        "--allowedit": Boolean,
         "-h": "--help",
         "-c": "--context",
         "-n": "--namespace",
@@ -62,7 +66,12 @@ function readFlags(argv: string[]) {
     if (parsed["--help"]) return { help: true }
     const extra = parsed._[0]
     if (extra) return { error: `unexpected argument: ${extra}` }
-    return { context: parsed["--context"] ?? "", namespace: parsed["--namespace"] ?? "" }
+    if (parsed["--readonly"] && parsed["--allowedit"]) return { error: "--readonly and --allowedit cannot be used together" }
+    return {
+      context: parsed["--context"] ?? "",
+      namespace: parsed["--namespace"] ?? "",
+      edit: parsed["--readonly"] ? false : parsed["--allowedit"] ? true : undefined,
+    }
   } catch (error) {
     if (error instanceof arg.ArgError) return { error: error.message }
     throw error

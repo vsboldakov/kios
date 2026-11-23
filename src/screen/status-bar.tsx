@@ -5,7 +5,7 @@ import { currentTarget, listedItems, rowAt, visibleRows } from "../workspace/sel
 import { filteredNamespaces, namespaceLabel } from "./namespace-list"
 import { theme } from "./theme"
 
-export function StatusBar(props: { filtering: boolean }) {
+export function StatusBar(props: { filtering: boolean; toggleEdit: boolean }) {
   const session = useSession()
   const cluster = useCluster()
 
@@ -78,7 +78,7 @@ export function StatusBar(props: { filtering: boolean }) {
       return `enter select   f filter${session.namespaceFilter() ? "   esc clear" : ""}   [ ] tabs${closeHint()}`
     }
     if (focus === "sidebar") return `enter open   t new   [ ] tabs${closeHint()}`
-    return `← parent   → child   d describe   t new   [ ] tabs${closeHint()}   e edit${logsHint()}   / menu   shift sort`
+    return `← parent   → child   d describe   t new   [ ] tabs${closeHint()}${props.toggleEdit ? "   e edit" : ""}${logsHint()}   / menu   shift sort`
   }
 
   return (

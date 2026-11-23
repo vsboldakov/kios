@@ -7,12 +7,13 @@ import { menuKinds, sidebarKinds } from "./resources"
 import { createSession } from "./workspace/session"
 import { Shell } from "./shell"
 
-export function App(props: { client: ClusterClient; namespace?: string }) {
+// edit fixes edit mode on or off and hides its toggle. Leave it undefined to let the user toggle.
+export function App(props: { client: ClusterClient; namespace?: string; edit?: boolean }) {
   const session = createSession(menuKinds)
   return (
     <SessionContext.Provider value={session}>
       <ClusterProvider client={props.client} namespace={props.namespace ?? ""}>
-        <Shell />
+        <Shell edit={props.edit} />
       </ClusterProvider>
     </SessionContext.Provider>
   )
