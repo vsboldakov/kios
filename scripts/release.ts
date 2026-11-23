@@ -132,15 +132,16 @@ function requireRelease(value: unknown): { assets: string[]; body: string } {
   }
 }
 
+// Freshly published npm tarballs can 404 for a minute or more while the registry CDN catches up.
 async function archiveSha(url: string): Promise<string> {
-  for (const attempt of [1, 2, 3, 4, 5, 6]) {
+  for (const attempt of Array.from({ length: 36 }, (_, index) => index + 1)) {
     const response = await fetch(url)
     if (response.ok) {
       const hasher = new Bun.CryptoHasher("sha256")
       hasher.update(new Uint8Array(await response.arrayBuffer()))
       return hasher.digest("hex")
     }
-    if (attempt < 6) await Bun.sleep(3000)
+    if (attempt < 36) await Bun.sleep(5000)
   }
   throw new Error(`missing archive ${url}`)
 }
