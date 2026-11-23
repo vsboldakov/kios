@@ -36,10 +36,6 @@ async function main() {
     console.log("No release.")
     return
   }
-  if (!(await onNpm(pkg.name, version)) && !process.env.NPM_CONFIG_TOKEN) {
-    throw new Error("Set the NPM_CONFIG_TOKEN repository secret (an npm automation token) before releasing.")
-  }
-
   if (planned && !tagged) {
     await writeRelease(planned.version, planned.notes)
     await commit(`chore(release): ${planned.version}`, "package.json", "CHANGELOG.md")
@@ -50,7 +46,7 @@ async function main() {
   }
 
   if (!(await onNpm(pkg.name, version))) {
-    await $`bun publish --tolerate-republish`
+    await $`npm publish`
     console.log(`Published ${pkg.name}@${version}`)
   }
   const sourceSha = await updateFormula(repo, version, branch)
