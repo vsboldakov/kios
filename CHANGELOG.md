@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.0
+
+### Features
+- add support for Helm charts and releases
+
 ## 0.9.0
 
 ### Features
