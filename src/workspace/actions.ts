@@ -1,4 +1,4 @@
-import { kubectlBin } from "../cluster/kubectl"
+import { helmBin, kubectlBin } from "../cluster/kubectl"
 import { findKind, resourceKinds, type KindCommand, type KubernetesObject, type ResourceKind } from "../resources"
 
 export interface EditAction {
@@ -18,6 +18,8 @@ export interface EditTarget {
 const deleteAction: EditAction = { key: "d", label: "Delete", id: "delete" }
 
 export function editActions(kindId: string, suspended = false, extra: readonly ResourceKind[] = []): EditAction[] {
+  if (kindId === "releases") return [{ key: "v", label: "Values", id: "values" }]
+  if (kindId === "charts") return []
   const actions = kindActions(kindId, suspended, extra)
   if (actions.length === 0 && !builtinEditable(kindId)) return []
   return [...actions, { key: "e", label: "Edit", id: "edit" }]
@@ -131,8 +133,9 @@ export function editCommand(kindId: string, actionId: string, target: EditTarget
 }
 
 export function commandLine(command: KindCommand, context = ""): string {
-  const scope = context ? ["--context", context] : []
-  const line = [shellWord(kubectlBin()), ...scope.map(shellWord), ...command.args.map(shellWord)].join(" ")
+  const helm = command.bin === "helm"
+  const scope = context ? [helm ? "--kube-context" : "--context", context] : []
+  const line = [shellWord(helm ? helmBin() : kubectlBin()), ...scope.map(shellWord), ...command.args.map(shellWord)].join(" ")
   if (command.stdin === undefined) return line
   return `${line} <<'EOF'\n${command.stdin}\nEOF`
 }

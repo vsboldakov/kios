@@ -61,6 +61,21 @@ export interface KubernetesObject {
   lastTimestamp?: string
   provisioner?: string
   usage?: { cpu?: string; memory?: string }
+  helm?: HelmData
+}
+
+// Fields read from a decoded Helm release secret. Chart rows reuse status and releases.
+export interface HelmData {
+  status: string
+  chart: string
+  chartName: string
+  version: string
+  appVersion: string
+  revision: string
+  updated: string
+  description: string
+  notes: string
+  releases?: number
 }
 
 export interface CellPart {
@@ -106,6 +121,7 @@ export interface ResourceKind {
   deletable?: boolean
   sidebar?: boolean
   aliases?: readonly string[]
+  mark?: string
   columns: Column[]
   actions?: readonly KindAction[]
 }

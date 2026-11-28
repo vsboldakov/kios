@@ -78,7 +78,7 @@ const loadingSnapshot: ResourceSnapshot = { status: "loading", items: [], error:
 const retryMs = 2000
 const cachedAfterMs = 1500
 
-export function createCluster(client: ClusterClient, initialNamespace = ""): Cluster {
+export function createCluster(client: ClusterClient, initialNamespace = "", pinned: readonly ResourceKind[] = []): Cluster {
   const snapshots = new ReactiveMap<string, ResourceSnapshot>()
   const attempts = new Map<string, number>()
   const cachedTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -92,7 +92,7 @@ export function createCluster(client: ClusterClient, initialNamespace = ""): Clu
   const [namespaces, setNamespaces] = createSignal<string[]>([])
   const [namespace, setNamespace] = createSignal(openedNamespace)
   const [namespacesReady, setNamespacesReady] = createSignal(false)
-  const [extraKinds, setExtraKinds] = createSignal<readonly ResourceKind[]>([])
+  const [extraKinds, setExtraKinds] = createSignal<readonly ResourceKind[]>(pinned)
   const [kindsReady, setKindsReady] = createSignal(!client.resources)
   // Context, namespaces, and discovery wait so the first list is the only kubectl until the rows are up.
   let listed = false
@@ -104,7 +104,7 @@ export function createCluster(client: ClusterClient, initialNamespace = ""): Clu
     if (!launchContext) void client.currentContext().then(setContextName).catch(() => setContextName("unavailable"))
     if (client.resources) {
       void client.resources()
-        .then(setExtraKinds)
+        .then((discovered) => setExtraKinds(pinKinds(pinned, discovered)))
         .catch(() => {
           // Sidebar kinds still open when discovery cannot read the API.
         })
@@ -424,4 +424,9 @@ function remember(map: Map<string, KubernetesObject>, object: KubernetesObject) 
   const uid = object.metadata?.uid
   if (!uid) return
   map.set(uid, object)
+}
+
+function pinKinds(pinned: readonly ResourceKind[], discovered: readonly ResourceKind[]): ResourceKind[] {
+  const ids = new Set(pinned.map((kind) => kind.id))
+  return [...pinned, ...discovered.filter((kind) => !ids.has(kind.id))]
 }

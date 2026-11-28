@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test"
 import { createEffect, createRoot } from "solid-js"
+import { helmKinds } from "../helm/kinds"
 import { findKind, type KubernetesObject, type ResourceKind } from "../resources"
 import { ClientError, createCluster, type Cluster, type ClusterClient, type WatchEvent } from "./cluster"
 
@@ -266,6 +267,33 @@ test("polls after a watch is forbidden", async () => {
     root.cluster.syncWatches([])
     root.dispose()
   }
+})
+
+test("keeps pinned kinds ahead of discovered resources", async () => {
+  let releaseKinds: ((kinds: ResourceKind[]) => void) | undefined
+  const cluster = createCluster(stub({
+    resources() {
+      return new Promise((resolve) => {
+        releaseKinds = resolve
+      })
+    },
+  }), "", helmKinds)
+  expect(cluster.extraKinds().map((kind) => kind.id)).toEqual(["charts", "releases"])
+  const pods = findKind("pods")
+  if (!pods) throw new Error("missing pods")
+  await cluster.refresh(pods)
+  releaseKinds?.([{ id: "certificates", label: "Certificates", resource: "certificates", namespaced: true, group: 15, sidebar: true, columns: [] }])
+  await until(() => cluster.kindsReady())
+  expect(cluster.extraKinds().map((kind) => kind.id)).toEqual(["charts", "releases", "certificates"])
+
+  const failed = createCluster(stub({
+    resources() {
+      return Promise.reject(new Error("nope"))
+    },
+  }), "", helmKinds)
+  await failed.refresh(pods)
+  await until(() => failed.kindsReady())
+  expect(failed.extraKinds().map((kind) => kind.id)).toEqual(["charts", "releases"])
 })
 
 test("keeps loaders up until CRDs and namespaces settle", async () => {

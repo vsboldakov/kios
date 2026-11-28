@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test"
 import { kubectlBin } from "../cluster/kubectl"
+import { upgradeCommand } from "../helm/values"
 import { commandLine, declaredPorts, editActions, editCommand, portMappings, shellContainer, triggeredJobName } from "./actions"
 import { resourceKinds, type ResourceKind } from "../resources"
 
@@ -118,6 +119,16 @@ test("builds the kubectl commands", () => {
   expect(editCommand("pods", "port-forward", { name: "api", namespace: "", ports: ["8080"] })).toBeNull()
   expect(editCommand("namespaces", "delete", { name: "demo", namespace: "" })?.args).toEqual(["delete", "namespaces", "demo", "--wait=false"])
   expect(triggeredJobName("a".repeat(80), 36).length).toBeLessThanOrEqual(63)
+})
+
+test("upgrades a release with helm and does not offer kubectl edit", () => {
+  expect(editActions("releases").map((action) => action.id)).toEqual(["values"])
+  expect(editActions("charts")).toEqual([])
+  expect(editCommand("releases", "edit", target)).toBeNull()
+  expect(editCommand("releases", "values", target)).toBeNull()
+  expect(commandLine(upgradeCommand("web", "default", "bitnami/nginx", "1.2.3", "/tmp/values.yaml"), "prod")).toBe(
+    "helm --kube-context prod upgrade web bitnami/nginx --version 1.2.3 -n default -f /tmp/values.yaml",
+  )
 })
 
 test("KIOS_KUBECTL replaces the kubectl binary on the command line", () => {

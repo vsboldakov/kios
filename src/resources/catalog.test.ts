@@ -1,5 +1,17 @@
 import { expect, test } from "bun:test"
+import { helmKinds } from "../helm/kinds"
 import { columnWidth, controlledKind, controllerOf, findKind, fitParts, formatAge, kindIdFor, logContainerNames, menuKinds, ownedItems, podContainers, resourceKinds, sidebarKinds, sidebarLabel, type KubernetesObject } from "."
+
+test("places helm kinds after events and before sidebar custom resources", () => {
+  const ids = sidebarKinds([
+    ...helmKinds,
+    { id: "certificates", label: "Certificates", resource: "certificates", namespaced: true, group: 15, sidebar: true, columns: [] },
+  ]).map((kind) => kind.id)
+  expect(ids.indexOf("charts")).toBe(ids.indexOf("events") + 1)
+  expect(ids.indexOf("releases")).toBe(ids.indexOf("charts") + 1)
+  expect(ids.indexOf("certificates")).toBe(ids.indexOf("releases") + 1)
+  expect(helmKinds.map((kind) => kind.mark)).toEqual(["Helm", "Helm"])
+})
 
 test("abbreviates sidebar kinds of more than two words", () => {
   expect(sidebarLabel("NetworkPolicies")).toBe("NetworkPolicies")

@@ -1,3 +1,5 @@
+import { isHelmKind } from "../helm/kinds"
+import { chartDetail, chartRows, releaseDetail, storedReleases } from "../helm/releases"
 import { parseApiTable } from "../resources/api-table"
 import { builtinKinds } from "../resources/builtin"
 import { mergeUsage } from "../resources/quantity"
@@ -25,6 +27,7 @@ export function createKubectlClient(context = ""): ClusterClient {
       return name || "default"
     },
     list: async (kind, namespace = "") => {
+      if (isHelmKind(kind.id)) return listHelm(kind.id, namespace)
       const args = ["get", kind.resource, "-o", "json"]
       if (kind.namespaced) args.splice(2, 0, ...(namespace ? ["-n", namespace] : ["-A"]))
       const listed = kubectl(args)
@@ -32,7 +35,7 @@ export function createKubectlClient(context = ""): ClusterClient {
       const [payload, metrics] = await Promise.all([listed, nodeMetrics()])
       return mergeUsage(parseList(payload), metrics)
     },
-    inspect: (kind, name, namespace) => inspectResource(kind, name, namespace),
+    inspect: (kind, name, namespace) => (isHelmKind(kind.id) ? inspectHelm(kind.id, name, namespace) : inspectResource(kind, name, namespace)),
     logs: (kind, name, namespace, previous, container) => logsFor(kind, name, namespace, previous, container),
     followLogs: (kind, name, namespace, onText, container) => followLogs(kind, name, namespace, onText, container),
     execute: (command) => execute(command),
@@ -129,6 +132,45 @@ async function inspectResource(kind: ResourceKind, name: string, namespace: stri
   return { describe, yaml, json: prettyJson(json) }
 }
 
+// Helm stores releases in Secrets or, with the configmap driver, ConfigMaps. Either list can be forbidden.
+const currentHelmSelector = "owner=helm,status!=superseded,status!=uninstalled"
+
+async function listHelm(id: string, namespace: string): Promise<KubernetesObject[]> {
+  const releases = await loadHelmReleases(namespace)
+  if (id === "charts") return chartRows(releases)
+  return releases
+}
+
+async function inspectHelm(id: string, name: string, namespace: string): Promise<ObjectView> {
+  if (id === "charts") {
+    const detail = chartDetail(name, await loadHelmReleases(""))
+    return detail
+  }
+  const scope = namespace ? ["-n", namespace] : ["-A"]
+  const selector = ["-l", `name=${name},${currentHelmSelector}`, "-o", "json"]
+  const [secrets, configMaps, yaml] = await Promise.all([
+    capture(kubectl(["get", "secret", ...scope, ...selector])),
+    capture(kubectl(["get", "configmap", ...scope, ...selector])),
+    capture(runHelm(["get", "values", name, ...(namespace ? ["-n", namespace] : []), "-o", "yaml"])),
+  ])
+  const release = storedReleases(secrets, configMaps).find((item) => item.metadata?.name === name && (namespace === "" || item.metadata?.namespace === namespace))
+  const detail = release ? releaseDetail(release) : { describe: secrets.trim().startsWith("{") ? `release ${name} not found` : secrets.trim(), json: "{}" }
+  return { describe: detail.describe, yaml, json: detail.json }
+}
+
+async function loadHelmReleases(namespace: string): Promise<KubernetesObject[]> {
+  const scope = namespace ? ["-n", namespace] : ["-A"]
+  const selector = ["-l", currentHelmSelector, "-o", "json"]
+  const [secrets, configMaps] = await Promise.all([
+    kubectl(["get", "secret", ...scope, ...selector]).catch((error: unknown) => error),
+    kubectl(["get", "configmap", ...scope, ...selector]).catch(() => ""),
+  ])
+  if (typeof secrets === "string") return storedReleases(secrets, configMaps)
+  const releases = storedReleases("", configMaps)
+  if (releases.length > 0) return releases
+  throw secrets
+}
+
 async function capture(work: Promise<string>): Promise<string> {
   try {
     return await work
@@ -169,13 +211,28 @@ function kubectl(args: string[]): Promise<string> {
 }
 
 async function execute(command: KindCommand): Promise<void> {
-  const bin = kubectlBin()
-  const args = scoped(command.args)
+  const helm = command.bin === "helm"
+  const bin = helm ? helmBin() : kubectlBin()
+  const args = helm ? helmArgs(kubeContext, command.args) : scoped(command.args)
   if (command.interactive) {
     await interact(bin, args)
     return
   }
   await run(bin, args, command.stdin)
+}
+
+export function helmBin(): string {
+  const bin = process.env.KIOS_HELM?.trim()
+  return bin || "helm"
+}
+
+export function runHelm(args: string[], context = kubeContext): Promise<string> {
+  return run(helmBin(), helmArgs(context, args))
+}
+
+function helmArgs(context: string, args: string[]): string[] {
+  if (!context) return args
+  return ["--kube-context", context, ...args]
 }
 
 async function interact(bin: string, args: string[]): Promise<void> {
@@ -216,6 +273,10 @@ function kubectlError(bin: string, stderr: string, code: number): ClientError {
 }
 
 function watchResource(kind: ResourceKind, onEvents: (events: WatchEvent[]) => void, namespace = ""): () => void {
+  if (isHelmKind(kind.id)) {
+    onEvents([{ type: "unwatchable" }])
+    return () => {}
+  }
   let stopped = false
   let proc: ReturnType<typeof Bun.spawn> | undefined
   void (async () => {

@@ -1,5 +1,7 @@
 import type { KeyEvent } from "@opentui/core"
 import { createMemo, createSignal } from "solid-js"
+import { runHelm } from "../cluster/kubectl"
+import { commandValuesFile, editValues, matchChart, removeValuesFile, upgradeCommand, upgradeTarget, valuesDocument, valuesFile } from "../helm/values"
 import { commandLine, declaredPorts, editActions, editCommand, portMappings, shellContainer } from "./actions"
 import type { Cluster } from "../cluster/cluster"
 import { findKind, type KindCommand } from "../resources"
@@ -107,10 +109,58 @@ export function createEditMode({
       setPrompt({ actionId, label: "ports", value: declaredPorts(current.kindId, current.object).join(" "), width: 24 })
       return
     }
+    if (actionId === "values") {
+      const chartName = current.object.helm?.chartName ?? ""
+      const version = current.object.helm?.version ?? ""
+      if (!chartName || !version) {
+        setNotice("release has no chart")
+        return
+      }
+      void prepareReleaseValues(current.name, current.namespace, chartName, version, current.kindId)
+      return
+    }
     const action = actions().find((item) => item.id === actionId)
     if (!action) return
     const container = shellContainer(current.object, pickedContainer())
     ask(editCommand(current.kindId, actionId, { name: current.name, namespace: current.namespace, container }, undefined, extra()), current.kindId, action)
+  }
+
+  const prepareReleaseValues = async (name: string, namespace: string, chartName: string, version: string, kind: string) => {
+    const token = ++request
+    setBusy(true)
+    setNotice("values…")
+    try {
+      const payload = await runHelm(["search", "repo", chartName, "--version", version, "-o", "json"], cluster.launchContext())
+      if (token !== request) return
+      const found = matchChart(payload, chartName, version)
+      if ("error" in found) {
+        setNotice(found.error)
+        return
+      }
+      ask(upgradeCommand(name, namespace, found.chart, version, valuesFile(name)), kind, { id: "values", label: "Values" })
+    } catch (error) {
+      if (token !== request) return
+      setNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      if (token === request) setBusy(false)
+    }
+  }
+
+  const applyReleaseValues = async (command: KindCommand): Promise<boolean> => {
+    const file = commandValuesFile(command)
+    const target = upgradeTarget(command)
+    const scope = target.namespace ? ["-n", target.namespace] : []
+    await suspend()
+    try {
+      const yaml = valuesDocument(await runHelm(["get", "values", target.name, ...scope, "-o", "yaml"], cluster.launchContext()))
+      const changed = await editValues(file, yaml)
+      if (!changed) return false
+      await cluster.execute(command)
+      return true
+    } finally {
+      await resume()
+      if (file) await removeValuesFile(file)
+    }
   }
 
   const submitPrompt = (value: string) => {
@@ -158,11 +208,12 @@ export function createEditMode({
     const token = ++request
     setBusy(true)
     setNotice(`${label}…`)
-    void perform(command)
-      .then(() => {
+    const work = label === "values" ? applyReleaseValues(command) : perform(command).then(() => true)
+    void work
+      .then((changed) => {
         if (token !== request) return
-        setNotice("")
-        finish(kind)
+        setNotice(changed ? "" : "values unchanged")
+        if (changed) finish(kind)
       })
       .catch((error: unknown) => {
         if (token !== request) return
@@ -203,7 +254,14 @@ export function createEditMode({
     submitPrompt,
     pending: pendingView,
     accept,
-    cancel: () => setPending(null),
+    cancel: () => {
+      const current = pending()
+      if (current?.actionId === "values") {
+        const file = commandValuesFile(current.command)
+        if (file) void removeValuesFile(file)
+      }
+      setPending(null)
+    },
     handleKey,
     run: runEdit,
   }

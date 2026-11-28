@@ -24,6 +24,7 @@ if ("error" in flags) {
 
 // Same binary kubectlBin() spawns. Fail before render() takes the terminal.
 const bin = process.env.KIOS_KUBECTL?.trim() || "kubectl"
+const helm = process.env.KIOS_HELM?.trim() || "helm"
 if (!Bun.which(bin)) {
   console.error(missingExecutable(bin))
   process.exit(1)
@@ -34,7 +35,7 @@ const { App } = await import("./app")
 const { createKubectlClient } = await import("./cluster/kubectl")
 
 // shortcut: letters show only if the terminal reports shift itself, drop these flags when the renderer exposes that directly
-await render(() => <App client={createKubectlClient(flags.context)} namespace={flags.namespace} edit={flags.edit} />, {
+await render(() => <App client={createKubectlClient(flags.context)} namespace={flags.namespace} edit={flags.edit} helm={Bun.which(helm) !== null} />, {
   exitOnCtrlC: true,
   useKittyKeyboard: { events: true, allKeysAsEscapes: true },
 })

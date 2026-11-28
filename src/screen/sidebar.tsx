@@ -85,6 +85,9 @@ function SidebarItem(props: { kind: ResourceKind; index: number }) {
     >
       <text fg={cursor() && focused() ? theme.selected : active() ? theme.primary : theme.fg}>
         {sidebarLabel(props.kind.label)}
+        <Show when={props.kind.mark}>
+          <span style={{ fg: cursor() && focused() ? theme.selected : theme.muted }}>{` ${props.kind.mark}`}</span>
+        </Show>
       </text>
     </box>
   )
